@@ -27,7 +27,7 @@ export const SUBSCRIPTION_TIERS = {
 
 export type SubscriptionTier = keyof typeof SUBSCRIPTION_TIERS;
 
-export const TELETON_DOCKER_IMAGE = "ghcr.io/tonresistor/teleton-agent";
+export const TELETON_DOCKER_IMAGE = "ghcr.io/alloeth/telehost-agent";
 export const TELETON_DOCKER_TAG = "latest";
 export const TELETON_WEBUI_PORT = "7777";
 

@@ -105,13 +105,13 @@ export const agents = pgTable(
 
     // Encrypted configuration blob (AES-256-GCM)
     configEncrypted: text("config_encrypted").notNull(),
-    configIv: varchar("config_iv", { length: 32 }).notNull(),
-    configTag: varchar("config_tag", { length: 32 }).notNull(),
+    configIv: varchar("config_iv", { length: 64 }).notNull(),
+    configTag: varchar("config_tag", { length: 128 }).notNull(),
 
     // Telegram session (encrypted)
     telegramSessionEncrypted: text("telegram_session_encrypted"),
-    telegramSessionIv: varchar("telegram_session_iv", { length: 32 }),
-    telegramSessionTag: varchar("telegram_session_tag", { length: 32 }),
+    telegramSessionIv: varchar("telegram_session_iv", { length: 64 }),
+    telegramSessionTag: varchar("telegram_session_tag", { length: 128 }),
     telegramSessionStatus: telegramSessionStatusEnum(
       "telegram_session_status",
     )

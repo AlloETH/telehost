@@ -112,8 +112,8 @@ export default function AgentDetailPage({
       )}
 
       {/* Controls */}
-      <div className="mt-6 flex gap-3">
-        {(agent.status === "stopped" || agent.status === "error") && (
+      <div className="mt-6 flex flex-wrap gap-3">
+        {!["running", "starting", "deleting"].includes(agent.status) && (
           <button
             onClick={() => doAction("start")}
             disabled={!!actionLoading}
@@ -149,7 +149,7 @@ export default function AgentDetailPage({
         <button
           onClick={doDelete}
           disabled={!!actionLoading}
-          className="rounded-lg border border-red-500/30 px-4 py-2 text-sm text-red-400 hover:bg-red-500/10 disabled:opacity-50 transition-colors"
+          className="ml-auto rounded-lg border border-red-500/30 px-4 py-2 text-sm text-red-400 hover:bg-red-500/10 disabled:opacity-50 transition-colors"
         >
           {actionLoading === "delete" ? "Deleting..." : "Delete"}
         </button>

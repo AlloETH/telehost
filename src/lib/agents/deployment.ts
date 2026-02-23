@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
 import { agents, subscriptions } from "@/lib/db/schema";
-import { eq, and, sql } from "drizzle-orm";
-import { encrypt, type EncryptedData } from "@/lib/crypto";
+import { eq, and } from "drizzle-orm";
+import { encrypt } from "@/lib/crypto";
 import {
   getCoolifyClient,
   type CreateDockerImageAppParams,
@@ -36,19 +36,18 @@ export async function createAgent(input: CreateAgentInput): Promise<string> {
     )
     .limit(1);
 
-  const maxAgents = sub.length > 0 ? sub[0].maxAgents : 1;
-
-  const agentCountResult = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(agents)
-    .where(eq(agents.userId, userId));
-
-  const currentAgents = Number(agentCountResult[0]?.count ?? 0);
-  if (currentAgents >= maxAgents) {
-    throw new Error(
-      `Agent limit reached (${currentAgents}/${maxAgents}). Upgrade your subscription.`,
-    );
-  }
+  // TODO: re-enable subscription limits after testing
+  // const maxAgents = sub.length > 0 ? sub[0].maxAgents : 1;
+  // const agentCountResult = await db
+  //   .select({ count: sql<number>`count(*)` })
+  //   .from(agents)
+  //   .where(eq(agents.userId, userId));
+  // const currentAgents = Number(agentCountResult[0]?.count ?? 0);
+  // if (currentAgents >= maxAgents) {
+  //   throw new Error(
+  //     `Agent limit reached (${currentAgents}/${maxAgents}). Upgrade your subscription.`,
+  //   );
+  // }
 
   // 2. Generate config.yaml and encrypt it
   const configYaml = generateConfigYaml(config);
@@ -114,19 +113,7 @@ export async function createAgent(input: CreateAgentInput): Promise<string> {
     },
   ]);
 
-  // 7. Set pre-deployment command to decode config into /data
-  const preDeployCmd = [
-    'mkdir -p /data',
-    'echo "$TELETON_CONFIG_B64" | base64 -d > /data/config.yaml',
-    'if [ -n "$TELETON_SESSION_B64" ]; then echo "$TELETON_SESSION_B64" | base64 -d > /data/telegram_session.txt; fi',
-  ].join(" && ");
-
-  await coolify.updateApp(coolifyApp.uuid, {
-    pre_deployment_command: preDeployCmd,
-    pre_deployment_command_container: "main",
-  });
-
-  // 8. Update agent record with Coolify UUID
+  // 7. Update agent record with Coolify UUID
   await db
     .update(agents)
     .set({

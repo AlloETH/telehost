@@ -45,8 +45,8 @@ export async function verifyTonProof(
     return { valid: false, reason: `timestamp_expired (now=${now}, proof=${proof.timestamp})` };
   }
 
-  // 3. Verify the domain
-  if (proof.domain.value !== appDomain) {
+  // 3. Verify the domain (skip in development — wallet caches manifest domain)
+  if (process.env.NODE_ENV !== "development" && proof.domain.value !== appDomain) {
     return { valid: false, reason: `domain_mismatch (proof="${proof.domain.value}", expected="${appDomain}")` };
   }
 

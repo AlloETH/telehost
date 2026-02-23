@@ -126,7 +126,9 @@ class CoolifyClient {
   }
 
   async bulkSetEnvVars(uuid: string, envVars: EnvVar[]): Promise<void> {
-    await this.request("PATCH", `/applications/${uuid}/envs/bulk`, envVars);
+    await this.request("PATCH", `/applications/${uuid}/envs/bulk`, {
+      data: envVars,
+    });
   }
 
   // === Logs ===
