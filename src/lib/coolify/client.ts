@@ -141,7 +141,15 @@ class CoolifyClient {
     if (opts?.since) params.set("since", String(opts.since));
     if (opts?.tail) params.set("tail", String(opts.tail));
     const query = params.toString() ? `?${params.toString()}` : "";
-    return this.request("GET", `/applications/${uuid}/logs${query}`);
+    const result = await this.request<unknown>("GET", `/applications/${uuid}/logs${query}`);
+    if (typeof result === "string") return result;
+    if (typeof result === "object" && result !== null) {
+      const obj = result as Record<string, unknown>;
+      if (typeof obj.logs === "string") return obj.logs;
+      if (Array.isArray(obj.logs)) return obj.logs.join("\n");
+      return JSON.stringify(result, null, 2);
+    }
+    return String(result);
   }
 
   // === Health Check ===
