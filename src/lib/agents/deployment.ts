@@ -129,7 +129,19 @@ export async function createAgent(input: CreateAgentInput): Promise<string> {
 export async function startAgent(agentId: string): Promise<void> {
   const agent = await getAgentOrThrow(agentId);
   const coolify = getCoolifyClient();
-  await coolify.startApp(agent.coolifyAppUuid!);
+
+  // Use deploy for first launch or after awaiting_session (never deployed before),
+  // use start for previously stopped agents
+  if (
+    agent.status === "awaiting_session" ||
+    agent.status === "provisioning" ||
+    agent.status === "error"
+  ) {
+    await coolify.deployApp(agent.coolifyAppUuid!);
+  } else {
+    await coolify.startApp(agent.coolifyAppUuid!);
+  }
+
   await db
     .update(agents)
     .set({ status: "starting", updatedAt: new Date() })

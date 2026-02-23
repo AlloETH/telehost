@@ -107,6 +107,10 @@ class CoolifyClient {
 
   // === Lifecycle ===
 
+  async deployApp(uuid: string): Promise<void> {
+    await this.request("POST", `/applications/${uuid}/deploy`);
+  }
+
   async startApp(uuid: string): Promise<void> {
     await this.request("POST", `/applications/${uuid}/start`);
   }

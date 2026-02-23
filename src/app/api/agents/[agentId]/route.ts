@@ -5,17 +5,27 @@ import { eq, and } from "drizzle-orm";
 import { deleteAgent } from "@/lib/agents/deployment";
 import { getCoolifyClient } from "@/lib/coolify/client";
 
+// States managed by our own logic that Coolify shouldn't override
+// unless Coolify says the app is actively running
+const PROTECTED_STATES = ["awaiting_session", "provisioning"];
+
 function mapCoolifyStatus(coolifyStatus: string, currentDbStatus: string): string {
   const s = coolifyStatus.toLowerCase();
+
+  // Running is always authoritative from Coolify
   if (s.includes("running") || s.includes("healthy")) return "running";
+
+  // Don't let Coolify override our own managed states
+  // (e.g. a never-deployed app reports "exited" but we know it's awaiting session)
+  if (PROTECTED_STATES.includes(currentDbStatus)) {
+    return currentDbStatus;
+  }
+
+  // Map other Coolify states
   if (s.includes("exited") || s.includes("stopped") || s === "stopped") return "stopped";
   if (s.includes("restarting")) return "starting";
   if (s.includes("removing") || s.includes("degraded")) return "error";
-  // Don't override transitional DB states like awaiting_session/provisioning
-  // if Coolify just says the app isn't running yet
-  if (currentDbStatus === "awaiting_session" || currentDbStatus === "provisioning") {
-    return currentDbStatus;
-  }
+
   return currentDbStatus;
 }
 
