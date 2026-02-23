@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { Bot, Zap, CreditCard, Plus, Rocket, ChevronRight } from "lucide-react";
 
 interface DashboardData {
   agents: { id: string; name: string; status: string }[];
@@ -55,8 +56,8 @@ export default function DashboardPage() {
         <div className="group rounded-xl border border-[var(--border)] bg-[var(--card)] p-5 transition-colors hover:border-[var(--muted-foreground)]/30">
           <div className="flex items-center justify-between">
             <p className="text-sm text-[var(--muted-foreground)]">Total Agents</p>
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--accent)] font-mono text-xs text-[var(--muted-foreground)]">
-              #
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--accent)] text-[var(--muted-foreground)]">
+              <Bot className="h-4 w-4" />
             </span>
           </div>
           <p className="mt-3 text-3xl font-bold">{data.agents.length}</p>
@@ -64,8 +65,8 @@ export default function DashboardPage() {
         <div className="group rounded-xl border border-[var(--border)] bg-[var(--card)] p-5 transition-colors hover:border-[var(--success)]/30">
           <div className="flex items-center justify-between">
             <p className="text-sm text-[var(--muted-foreground)]">Running</p>
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-green-500/10 text-xs text-[var(--success)]">
-              +
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-green-500/10 text-[var(--success)]">
+              <Zap className="h-4 w-4" />
             </span>
           </div>
           <p className="mt-3 text-3xl font-bold text-[var(--success)]">
@@ -75,8 +76,8 @@ export default function DashboardPage() {
         <div className="group rounded-xl border border-[var(--border)] bg-[var(--card)] p-5 transition-colors hover:border-[var(--primary)]/30">
           <div className="flex items-center justify-between">
             <p className="text-sm text-[var(--muted-foreground)]">Subscription</p>
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--primary)]/10 text-xs text-[var(--primary)]">
-              $
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--primary)]/10 text-[var(--primary)]">
+              <CreditCard className="h-4 w-4" />
             </span>
           </div>
           <p className="mt-3 text-xl font-bold capitalize">
@@ -100,8 +101,9 @@ export default function DashboardPage() {
       <div className="mt-8 flex gap-3">
         <Link
           href="/dashboard/agents/new"
-          className="rounded-lg bg-[var(--primary)] px-5 py-2.5 text-sm font-medium text-white hover:brightness-110 transition-all"
+          className="inline-flex items-center gap-2 rounded-lg bg-[var(--primary)] px-5 py-2.5 text-sm font-medium text-white hover:brightness-110 transition-all"
         >
+          <Rocket className="h-4 w-4" />
           Deploy New Agent
         </Link>
         <Link

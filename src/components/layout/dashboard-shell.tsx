@@ -4,11 +4,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { TonConnectAuthButton } from "@/components/auth/ton-connect-button";
 import { type ReactNode } from "react";
+import { LayoutDashboard, Bot, CreditCard, Plus, type LucideIcon } from "lucide-react";
 
-const navItems = [
-  { href: "/dashboard", label: "Overview", icon: "~" },
-  { href: "/dashboard/agents", label: "Agents", icon: ">" },
-  { href: "/dashboard/billing", label: "Billing", icon: "$" },
+const navItems: { href: string; label: string; icon: LucideIcon }[] = [
+  { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
+  { href: "/dashboard/agents", label: "Agents", icon: Bot },
+  { href: "/dashboard/billing", label: "Billing", icon: CreditCard },
 ];
 
 export function DashboardShell({ children }: { children: ReactNode }) {
@@ -45,9 +46,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
                     : "text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)]"
                 }`}
               >
-                <span className="flex h-5 w-5 items-center justify-center font-mono text-xs opacity-60">
-                  {item.icon}
-                </span>
+                <item.icon className="h-4 w-4 opacity-60" />
                 {item.label}
               </Link>
             );
@@ -58,7 +57,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
             href="/dashboard/agents/new"
             className="flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--primary)] px-4 py-2 text-sm font-medium text-white hover:brightness-110 transition-all"
           >
-            + Deploy Agent
+            <Plus className="h-4 w-4" /> Deploy Agent
           </Link>
         </div>
       </aside>

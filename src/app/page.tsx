@@ -1,35 +1,45 @@
 import { TonConnectAuthButton } from "@/components/auth/ton-connect-button";
 import { SUBSCRIPTION_TIERS } from "@/lib/constants";
 import Link from "next/link";
+import {
+  Rocket,
+  Wrench,
+  Wallet,
+  Brain,
+  ShieldCheck,
+  Activity,
+  Check,
+  type LucideIcon,
+} from "lucide-react";
 
-const features = [
+const features: { icon: LucideIcon; title: string; desc: string }[] = [
   {
-    icon: "~>",
+    icon: Rocket,
     title: "One-Click Deploy",
     desc: "Configure your agent, connect Telegram, and deploy. We handle Docker, scaling, and monitoring.",
   },
   {
-    icon: "{}",
+    icon: Wrench,
     title: "112+ Built-in Tools",
     desc: "Telegram messaging, TON transfers, DEX trading, web search, file management, and more.",
   },
   {
-    icon: "<>",
+    icon: Wallet,
     title: "Pay with TON",
     desc: "Connect your wallet, pick a plan, and pay with TON. No credit cards, no KYC.",
   },
   {
-    icon: "//",
+    icon: Brain,
     title: "Multiple LLMs",
     desc: "Use Anthropic, OpenAI, Google, xAI, Groq, or OpenRouter. Bring your own API key.",
   },
   {
-    icon: "##",
+    icon: ShieldCheck,
     title: "Secure by Design",
     desc: "Encrypted credentials, isolated containers, resource limits. Your keys never leave encrypted storage.",
   },
   {
-    icon: ">>",
+    icon: Activity,
     title: "Real-time Monitoring",
     desc: "View logs, check health, and manage agents through the dashboard or built-in WebUI.",
   },
@@ -69,7 +79,7 @@ export default function Home() {
             <span className="gradient-text">Telegram + TON</span>
           </h2>
           <p className="mx-auto mt-6 max-w-xl text-lg leading-relaxed text-[var(--muted-foreground)]">
-            Launch autonomous AI agents that manage Telegram conversations, trade on DEXes, and interact with TON blockchain — all with one click.
+            Launch autonomous AI agents that manage Telegram conversations, trade on DEXes, and interact with TON blockchain. All with one click.
           </p>
           <div className="mt-10 flex items-center justify-center gap-4">
             <Link
@@ -105,8 +115,8 @@ export default function Home() {
               key={f.title}
               className="glow-card group rounded-xl border border-[var(--border)] bg-[var(--card)] p-6 transition-all duration-200"
             >
-              <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-[var(--primary)]/10 font-mono text-sm text-[var(--primary)]">
-                {f.icon}
+              <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-[var(--primary)]/10 text-[var(--primary)]">
+                <f.icon className="h-5 w-5" />
               </div>
               <h4 className="text-base font-semibold">{f.title}</h4>
               <p className="mt-2 text-sm leading-relaxed text-[var(--muted-foreground)]">
@@ -158,15 +168,15 @@ export default function Home() {
                   </div>
                   <ul className="mt-6 space-y-3 text-sm">
                     <li className="flex items-center gap-2 text-[var(--muted-foreground)]">
-                      <span className="text-[var(--success)]">+</span>
+                      <Check className="h-4 w-4 text-[var(--success)]" />
                       {tier.maxAgents} agent{tier.maxAgents > 1 ? "s" : ""}
                     </li>
                     <li className="flex items-center gap-2 text-[var(--muted-foreground)]">
-                      <span className="text-[var(--success)]">+</span>
+                      <Check className="h-4 w-4 text-[var(--success)]" />
                       {tier.memoryLimitMb} MB RAM per agent
                     </li>
                     <li className="flex items-center gap-2 text-[var(--muted-foreground)]">
-                      <span className="text-[var(--success)]">+</span>
+                      <Check className="h-4 w-4 text-[var(--success)]" />
                       {tier.cpuLimit} vCPU per agent
                     </li>
                   </ul>
