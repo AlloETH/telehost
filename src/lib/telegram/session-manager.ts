@@ -6,6 +6,7 @@ import {
 } from "@/lib/constants";
 
 export type SessionStatus =
+  | "connecting"
   | "awaiting_code"
   | "awaiting_2fa"
   | "completed"
@@ -18,7 +19,7 @@ interface PendingSession {
   status: SessionStatus;
   sessionString: string | null;
   error: string | null;
-  agentId: string;
+  agentId: string | null;
   userId: string;
   createdAt: number;
 }
@@ -45,14 +46,20 @@ function ensureCleanupRunning() {
   }, 60_000);
 }
 
-export async function startSession(
+/**
+ * Start a Telegram auth session. Returns immediately —
+ * the auth (including DC migration) runs in the background.
+ * Frontend should poll getSessionStatus() until status changes
+ * from "connecting" to "awaiting_code".
+ */
+export function startSession(
   sessionKey: string,
   apiId: number,
   apiHash: string,
   phone: string,
-  agentId: string,
+  agentId: string | null,
   userId: string,
-): Promise<{ status: SessionStatus; error?: string }> {
+): { status: SessionStatus; error?: string } {
   // Check concurrent limit
   if (pendingSessions.size >= MAX_CONCURRENT_TELEGRAM_SESSIONS) {
     return {
@@ -61,28 +68,30 @@ export async function startSession(
     };
   }
 
-  // Check if user already has a pending session
-  for (const [, session] of pendingSessions) {
-    if (session.userId === userId && session.status !== "completed" && session.status !== "error") {
-      return {
-        status: "error",
-        error: "You already have a pending session. Please complete or wait for it to expire.",
-      };
+  // Clean up any existing pending sessions for this user
+  for (const [key, session] of pendingSessions) {
+    if (session.userId === userId) {
+      cleanupSession(key);
     }
   }
+
+  console.log(`[TG Session] Starting auth for phone=${phone}, apiId=${apiId}`);
 
   const client = new TelegramClient(
     new StringSession(""),
     apiId,
     apiHash,
-    { connectionRetries: 3 },
+    {
+      connectionRetries: 5,
+      retryDelay: 1000,
+    },
   );
 
   const pending: PendingSession = {
     client,
     resolveCode: null,
     resolvePassword: null,
-    status: "awaiting_code",
+    status: "connecting",
     sessionString: null,
     error: null,
     agentId,
@@ -93,37 +102,41 @@ export async function startSession(
   pendingSessions.set(sessionKey, pending);
   ensureCleanupRunning();
 
-  // Start auth in background
+  // Start auth entirely in background — handles DC migration transparently
   client
     .start({
       phoneNumber: phone,
       phoneCode: () =>
         new Promise<string>((resolve) => {
+          console.log("[TG Session] Code requested by Telegram");
+          pending.status = "awaiting_code";
           pending.resolveCode = resolve;
         }),
       password: () =>
         new Promise<string>((resolve) => {
+          console.log("[TG Session] 2FA password requested by Telegram");
           pending.status = "awaiting_2fa";
           pending.resolvePassword = resolve;
         }),
       onError: (err: Error) => {
+        console.error("[TG Session] Auth error:", err.message);
         pending.status = "error";
         pending.error = err.message;
       },
     })
     .then(() => {
+      console.log("[TG Session] Auth completed successfully");
       pending.sessionString = client.session.save() as unknown as string;
       pending.status = "completed";
     })
     .catch((err: Error) => {
+      console.error("[TG Session] Auth failed:", err.message);
       pending.status = "error";
       pending.error = err.message;
     });
 
-  // Wait for Telegram to process the phone number
-  await new Promise((r) => setTimeout(r, 3000));
-
-  return { status: pending.status, error: pending.error ?? undefined };
+  // Return immediately — frontend will poll for status
+  return { status: "connecting" };
 }
 
 export function submitCode(
@@ -183,7 +196,7 @@ export function getSessionStatus(
 ): {
   status: SessionStatus;
   sessionString?: string;
-  agentId?: string;
+  agentId?: string | null;
   error?: string;
 } | null {
   const session = pendingSessions.get(sessionKey);

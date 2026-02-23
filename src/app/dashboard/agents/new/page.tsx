@@ -12,6 +12,8 @@ const LLM_PROVIDERS = [
   { value: "openrouter", label: "OpenRouter" },
 ];
 
+type VerifyStep = "idle" | "sending" | "code" | "2fa" | "verified";
+
 export default function NewAgentPage() {
   const router = useRouter();
   const [step, setStep] = useState(1);
@@ -25,6 +27,13 @@ export default function NewAgentPage() {
     slug: string;
     domain: string;
   }>({ checking: false, available: null, slug: "", domain: "" });
+
+  // Telegram verification
+  const [verifyStep, setVerifyStep] = useState<VerifyStep>("idle");
+  const [sessionKey, setSessionKey] = useState("");
+  const [code, setCode] = useState("");
+  const [password, setPassword] = useState("");
+  const [sessionString, setSessionString] = useState("");
 
   const [form, setForm] = useState({
     name: "",
@@ -76,7 +85,118 @@ export default function NewAgentPage() {
     return () => clearTimeout(timer);
   }, [form.name, checkName]);
 
-  const handleSubmit = async () => {
+  // Step 4: Start Telegram verification (non-blocking + poll)
+  const startVerification = async () => {
+    setVerifyStep("sending");
+    setError("");
+    try {
+      const res = await fetch("/api/telegram-session/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          apiId: parseInt(form.telegramApiId, 10),
+          apiHash: form.telegramApiHash,
+          phone: form.telegramPhone,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setSessionKey(data.sessionKey);
+      // Start polling — status will be "connecting" initially
+      pollSessionStatus(data.sessionKey);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to send code");
+      setVerifyStep("idle");
+    }
+  };
+
+  const pollSessionStatus = (key: string) => {
+    const poll = async () => {
+      try {
+        const res = await fetch(
+          `/api/telegram-session/status?sessionKey=${key}`,
+        );
+        if (!res.ok) {
+          setError("Session expired or not found");
+          setVerifyStep("idle");
+          return;
+        }
+        const data = await res.json();
+        if (data.status === "awaiting_code") {
+          setVerifyStep("code");
+          return;
+        }
+        if (data.status === "error") {
+          setError(data.error || "Telegram connection failed");
+          setVerifyStep("idle");
+          return;
+        }
+        // Still connecting — poll again
+        setTimeout(poll, 1000);
+      } catch {
+        setError("Connection lost");
+        setVerifyStep("idle");
+      }
+    };
+    poll();
+  };
+
+  const submitCode = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch("/api/telegram-session/verify-code", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionKey, code }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      if (data.status === "awaiting_2fa") {
+        setVerifyStep("2fa");
+      } else if (data.status === "completed") {
+        setSessionString(data.sessionString);
+        setVerifyStep("verified");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Verification failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const submit2FA = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch("/api/telegram-session/verify-2fa", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionKey, password }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      if (data.status === "completed") {
+        setSessionString(data.sessionString);
+        setVerifyStep("verified");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "2FA verification failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Auto-start verification when entering step 4
+  useEffect(() => {
+    if (step === 4 && verifyStep === "idle") {
+      startVerification();
+    }
+  }, [step]);
+
+  const handleDeploy = async () => {
     setLoading(true);
     setError("");
 
@@ -102,6 +222,7 @@ export default function NewAgentPage() {
           ownerUsername: form.ownerUsername || undefined,
           tavilyApiKey: form.tavilyApiKey || undefined,
           tonapiKey: form.tonapiKey || undefined,
+          telegramSessionString: sessionString || undefined,
         }),
       });
 
@@ -125,7 +246,7 @@ export default function NewAgentPage() {
     <div className="mx-auto max-w-2xl">
       <h1 className="text-2xl font-bold">Deploy New Agent</h1>
       <p className="mt-1 text-[var(--muted-foreground)]">
-        Step {step} of 3
+        Step {step} of 4
       </p>
 
       {error && (
@@ -146,7 +267,6 @@ export default function NewAgentPage() {
               placeholder="My Teleton Agent"
               className="w-full rounded-lg border border-[var(--border)] bg-[var(--secondary)] px-3 py-2 text-sm focus:border-[var(--primary)] focus:outline-none"
             />
-            {/* Name availability feedback */}
             {form.name.trim() && (
               <div className="mt-1.5">
                 {nameStatus.checking ? (
@@ -331,7 +451,7 @@ export default function NewAgentPage() {
         </div>
       )}
 
-      {/* Step 3: Optional + Deploy */}
+      {/* Step 3: Optional Settings */}
       {step === 3 && (
         <div className="mt-6 space-y-4">
           <div>
@@ -387,13 +507,133 @@ export default function NewAgentPage() {
               Back
             </button>
             <button
-              onClick={handleSubmit}
-              disabled={loading}
+              onClick={() => setStep(4)}
               className="rounded-lg bg-[var(--primary)] px-5 py-2.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
             >
-              {loading ? "Deploying..." : "Deploy Agent"}
+              Next: Verify Telegram
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Step 4: Telegram Verification + Deploy */}
+      {step === 4 && (
+        <div className="mt-6 space-y-4">
+          {/* Sending code */}
+          {verifyStep === "sending" && (
+            <div className="flex items-center gap-3">
+              <div className="h-5 w-5 animate-spin rounded-full border-2 border-[var(--primary)] border-t-transparent" />
+              <p className="text-sm text-[var(--muted-foreground)]">
+                Sending verification code to your Telegram...
+              </p>
+            </div>
+          )}
+
+          {/* Enter code */}
+          {verifyStep === "code" && (
+            <>
+              <p className="text-sm text-[var(--muted-foreground)]">
+                A verification code has been sent to your Telegram app.
+              </p>
+              <div>
+                <label className="mb-1 block text-sm font-medium">
+                  Verification Code
+                </label>
+                <input
+                  type="text"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value)}
+                  placeholder="12345"
+                  maxLength={6}
+                  autoFocus
+                  className="w-full rounded-lg border border-[var(--border)] bg-[var(--secondary)] px-3 py-2 text-center text-2xl tracking-[0.5em] font-mono"
+                />
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setStep(3);
+                    setVerifyStep("idle");
+                    setCode("");
+                    setError("");
+                  }}
+                  className="rounded-lg border border-[var(--border)] px-5 py-2.5 text-sm hover:bg-[var(--accent)] transition-colors"
+                >
+                  Back
+                </button>
+                <button
+                  onClick={submitCode}
+                  disabled={loading || code.length < 5}
+                  className="rounded-lg bg-[var(--primary)] px-5 py-2.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
+                >
+                  {loading ? "Verifying..." : "Verify Code"}
+                </button>
+              </div>
+            </>
+          )}
+
+          {/* 2FA */}
+          {verifyStep === "2fa" && (
+            <>
+              <p className="text-sm text-[var(--muted-foreground)]">
+                This account has two-factor authentication enabled. Enter your
+                password.
+              </p>
+              <div>
+                <label className="mb-1 block text-sm font-medium">
+                  2FA Password
+                </label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  autoFocus
+                  className="w-full rounded-lg border border-[var(--border)] bg-[var(--secondary)] px-3 py-2 text-sm"
+                />
+              </div>
+              <button
+                onClick={submit2FA}
+                disabled={loading || !password}
+                className="rounded-lg bg-[var(--primary)] px-5 py-2.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
+              >
+                {loading ? "Verifying..." : "Submit Password"}
+              </button>
+            </>
+          )}
+
+          {/* Verified — ready to deploy */}
+          {verifyStep === "verified" && (
+            <>
+              <div className="flex items-center gap-3 rounded-xl border border-green-500/30 bg-green-500/10 p-4">
+                <span className="text-xl text-green-400">&#10003;</span>
+                <div>
+                  <p className="font-medium text-green-400">
+                    Telegram verified
+                  </p>
+                  <p className="mt-0.5 text-sm text-[var(--muted-foreground)]">
+                    Your account is authenticated and ready to go.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={handleDeploy}
+                disabled={loading}
+                className="w-full rounded-lg bg-[var(--primary)] px-5 py-2.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
+              >
+                {loading ? "Deploying..." : "Deploy Agent"}
+              </button>
+            </>
+          )}
+
+          {/* Error with retry */}
+          {verifyStep === "idle" && error && (
+            <button
+              onClick={startVerification}
+              className="rounded-lg border border-[var(--border)] px-4 py-2 text-sm hover:bg-[var(--accent)] transition-colors"
+            >
+              Retry Verification
+            </button>
+          )}
         </div>
       )}
     </div>

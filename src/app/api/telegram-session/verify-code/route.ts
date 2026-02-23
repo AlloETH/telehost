@@ -45,11 +45,22 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // If completed, inject session and start agent
-  if (status.status === "completed" && status.sessionString && status.agentId) {
-    await injectTelegramSession(status.agentId, status.sessionString);
-    await startAgent(status.agentId);
-    cleanupSession(parsed.data.sessionKey);
+  if (status.status === "completed" && status.sessionString) {
+    if (status.agentId) {
+      // Session page mode: inject into existing agent and start it
+      await injectTelegramSession(status.agentId, status.sessionString);
+      await startAgent(status.agentId);
+      cleanupSession(parsed.data.sessionKey);
+      return NextResponse.json({ status: status.status });
+    } else {
+      // Wizard mode: return session string for agent creation
+      const sessionString = status.sessionString;
+      cleanupSession(parsed.data.sessionKey);
+      return NextResponse.json({
+        status: status.status,
+        sessionString,
+      });
+    }
   }
 
   return NextResponse.json({

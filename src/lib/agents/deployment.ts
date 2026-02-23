@@ -23,6 +23,7 @@ export interface CreateAgentInput {
   userId: string;
   name: string;
   config: AgentConfig;
+  telegramSessionString?: string;
 }
 
 export async function createAgent(input: CreateAgentInput): Promise<string> {
@@ -142,15 +143,42 @@ export async function createAgent(input: CreateAgentInput): Promise<string> {
     },
   ]);
 
-  // 8. Update agent record with Coolify UUID
-  await db
-    .update(agents)
-    .set({
-      coolifyAppUuid: coolifyApp.uuid,
-      status: "awaiting_session",
-      updatedAt: new Date(),
-    })
-    .where(eq(agents.id, agent.id));
+  // 8. Handle session string if provided (wizard flow)
+  if (input.telegramSessionString) {
+    const sessionB64 = Buffer.from(input.telegramSessionString).toString("base64");
+    await coolify.setEnvVar(coolifyApp.uuid, {
+      key: "TELETON_SESSION_B64",
+      value: sessionB64,
+      is_literal: true,
+      is_shown_once: true,
+    });
+
+    const encryptedSession = encrypt(input.telegramSessionString);
+    await db
+      .update(agents)
+      .set({
+        coolifyAppUuid: coolifyApp.uuid,
+        telegramSessionEncrypted: encryptedSession.ciphertext,
+        telegramSessionIv: encryptedSession.iv,
+        telegramSessionTag: encryptedSession.tag + ":" + encryptedSession.salt,
+        telegramSessionStatus: "active",
+        status: "starting",
+        updatedAt: new Date(),
+      })
+      .where(eq(agents.id, agent.id));
+
+    // Auto-deploy since session is ready
+    await coolify.deployApp(coolifyApp.uuid);
+  } else {
+    await db
+      .update(agents)
+      .set({
+        coolifyAppUuid: coolifyApp.uuid,
+        status: "awaiting_session",
+        updatedAt: new Date(),
+      })
+      .where(eq(agents.id, agent.id));
+  }
 
   return agent.id;
 }

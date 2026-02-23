@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, use } from "react";
+import { useState, useEffect, useRef, use } from "react";
 import Link from "next/link";
 
-type Step = "phone" | "code" | "2fa" | "success" | "error";
+type Step = "connecting" | "code" | "2fa" | "success" | "error";
 
 export default function SessionSetupPage({
   params,
@@ -11,43 +11,75 @@ export default function SessionSetupPage({
   params: Promise<{ agentId: string }>;
 }) {
   const { agentId } = use(params);
-  const [step, setStep] = useState<Step>("phone");
+  const [step, setStep] = useState<Step>("connecting");
   const [sessionKey, setSessionKey] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const pollRef = useRef(false);
 
-  const [phone, setPhone] = useState("");
-  const [apiId, setApiId] = useState("");
-  const [apiHash, setApiHash] = useState("");
   const [code, setCode] = useState("");
   const [password, setPassword] = useState("");
 
-  const startSession = async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const res = await fetch("/api/telegram-session/start", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          agentId,
-          apiId: parseInt(apiId, 10),
-          apiHash,
-          phone,
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-
-      setSessionKey(data.sessionKey);
-      setStep("code");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to start session");
-    } finally {
-      setLoading(false);
-    }
+  const pollStatus = (key: string) => {
+    pollRef.current = true;
+    const poll = async () => {
+      if (!pollRef.current) return;
+      try {
+        const res = await fetch(
+          `/api/telegram-session/status?sessionKey=${key}`,
+        );
+        if (!res.ok) {
+          setError("Session expired or not found");
+          setStep("error");
+          return;
+        }
+        const data = await res.json();
+        if (data.status === "awaiting_code") {
+          setStep("code");
+          return;
+        }
+        if (data.status === "error") {
+          setError(data.error || "Telegram connection failed");
+          setStep("error");
+          return;
+        }
+        setTimeout(poll, 1000);
+      } catch {
+        setError("Connection lost");
+        setStep("error");
+      }
+    };
+    poll();
   };
+
+  // Auto-start session using stored credentials
+  useEffect(() => {
+    const start = async () => {
+      setError("");
+      try {
+        const res = await fetch("/api/telegram-session/start", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ agentId }),
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+
+        setSessionKey(data.sessionKey);
+        pollStatus(data.sessionKey);
+      } catch (err) {
+        setError(
+          err instanceof Error ? err.message : "Failed to start session",
+        );
+        setStep("error");
+      }
+    };
+    start();
+    return () => {
+      pollRef.current = false;
+    };
+  }, [agentId]);
 
   const submitCode = async () => {
     setLoading(true);
@@ -101,6 +133,33 @@ export default function SessionSetupPage({
     }
   };
 
+  const retry = () => {
+    setError("");
+    setStep("connecting");
+    setSessionKey("");
+    setCode("");
+    setPassword("");
+    const start = async () => {
+      try {
+        const res = await fetch("/api/telegram-session/start", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ agentId }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        setSessionKey(data.sessionKey);
+        pollStatus(data.sessionKey);
+      } catch (err) {
+        setError(
+          err instanceof Error ? err.message : "Failed to start session",
+        );
+        setStep("error");
+      }
+    };
+    start();
+  };
+
   return (
     <div className="mx-auto max-w-lg">
       <Link
@@ -120,55 +179,29 @@ export default function SessionSetupPage({
         </div>
       )}
 
-      {/* Step: Phone */}
-      {step === "phone" && (
-        <div className="mt-6 space-y-4">
+      {/* Connecting */}
+      {step === "connecting" && (
+        <div className="mt-6 flex items-center gap-3">
+          <div className="h-5 w-5 animate-spin rounded-full border-2 border-[var(--primary)] border-t-transparent" />
           <p className="text-sm text-[var(--muted-foreground)]">
-            Enter the Telegram credentials for the account your agent will use.
-            We recommend using a dedicated account.
+            Connecting to Telegram...
           </p>
-          <div>
-            <label className="mb-1 block text-sm font-medium">API ID</label>
-            <input
-              type="text"
-              value={apiId}
-              onChange={(e) => setApiId(e.target.value)}
-              placeholder="12345678"
-              className="w-full rounded-lg border border-[var(--border)] bg-[var(--secondary)] px-3 py-2 text-sm"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium">API Hash</label>
-            <input
-              type="password"
-              value={apiHash}
-              onChange={(e) => setApiHash(e.target.value)}
-              className="w-full rounded-lg border border-[var(--border)] bg-[var(--secondary)] px-3 py-2 text-sm"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium">
-              Phone Number
-            </label>
-            <input
-              type="text"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              placeholder="+1234567890"
-              className="w-full rounded-lg border border-[var(--border)] bg-[var(--secondary)] px-3 py-2 text-sm"
-            />
-          </div>
+        </div>
+      )}
+
+      {/* Error with retry */}
+      {step === "error" && (
+        <div className="mt-6">
           <button
-            onClick={startSession}
-            disabled={loading || !apiId || !apiHash || !phone}
-            className="w-full rounded-lg bg-[var(--primary)] px-5 py-2.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
+            onClick={retry}
+            className="rounded-lg border border-[var(--border)] px-4 py-2 text-sm hover:bg-[var(--accent)] transition-colors"
           >
-            {loading ? "Sending code..." : "Send Verification Code"}
+            Retry
           </button>
         </div>
       )}
 
-      {/* Step: Code */}
+      {/* Code */}
       {step === "code" && (
         <div className="mt-6 space-y-4">
           <p className="text-sm text-[var(--muted-foreground)]">
@@ -199,7 +232,7 @@ export default function SessionSetupPage({
         </div>
       )}
 
-      {/* Step: 2FA */}
+      {/* 2FA */}
       {step === "2fa" && (
         <div className="mt-6 space-y-4">
           <p className="text-sm text-[var(--muted-foreground)]">
@@ -228,7 +261,7 @@ export default function SessionSetupPage({
         </div>
       )}
 
-      {/* Step: Success */}
+      {/* Success */}
       {step === "success" && (
         <div className="mt-6 text-center">
           <div className="inline-flex h-16 w-16 items-center justify-center rounded-full bg-green-500/20">

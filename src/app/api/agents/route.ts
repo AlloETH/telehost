@@ -24,6 +24,7 @@ const createAgentSchema = z.object({
   ownerUsername: z.string().optional(),
   tavilyApiKey: z.string().optional(),
   tonapiKey: z.string().optional(),
+  telegramSessionString: z.string().optional(),
 });
 
 export async function GET(req: NextRequest) {
@@ -82,6 +83,7 @@ export async function POST(req: NextRequest) {
     const agentId = await createAgent({
       userId,
       name: parsed.data.name,
+      telegramSessionString: parsed.data.telegramSessionString,
       config: {
         provider: parsed.data.provider,
         apiKey: parsed.data.apiKey,
