@@ -3,31 +3,7 @@ import { db } from "@/lib/db";
 import { agents } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { deleteAgent } from "@/lib/agents/deployment";
-import { getCoolifyClient } from "@/lib/coolify/client";
-
-// States managed by our own logic that Coolify shouldn't override
-// unless Coolify says the app is actively running
-const PROTECTED_STATES = ["awaiting_session", "provisioning"];
-
-function mapCoolifyStatus(coolifyStatus: string, currentDbStatus: string): string {
-  const s = coolifyStatus.toLowerCase();
-
-  // Running is always authoritative from Coolify
-  if (s.includes("running") || s.includes("healthy")) return "running";
-
-  // Don't let Coolify override our own managed states
-  // (e.g. a never-deployed app reports "exited" but we know it's awaiting session)
-  if (PROTECTED_STATES.includes(currentDbStatus)) {
-    return currentDbStatus;
-  }
-
-  // Map other Coolify states
-  if (s.includes("exited") || s.includes("stopped") || s === "stopped") return "stopped";
-  if (s.includes("restarting")) return "starting";
-  if (s.includes("removing") || s.includes("degraded")) return "error";
-
-  return currentDbStatus;
-}
+import { syncAgentFromCoolify } from "@/lib/agents/sync-status";
 
 export async function GET(
   req: NextRequest,
@@ -65,41 +41,11 @@ export async function GET(
 
   const agent = { ...results[0] };
 
-  // Sync status from Coolify if app exists and not in a terminal/transitional state we control
-  if (agent.coolifyAppUuid && !["deleting", "provisioning"].includes(agent.status)) {
-    try {
-      const coolify = getCoolifyClient();
-      const coolifyApp = await coolify.getApp(agent.coolifyAppUuid);
-
-      const updates: Record<string, unknown> = {};
-
-      // Sync status
-      if (coolifyApp.status) {
-        const mappedStatus = mapCoolifyStatus(String(coolifyApp.status), agent.status);
-        if (mappedStatus !== agent.status) {
-          updates.status = mappedStatus;
-          agent.status = mappedStatus;
-        }
-      }
-
-      // Sync domain/fqdn
-      const fqdn = coolifyApp.fqdn ? String(coolifyApp.fqdn) : null;
-      if (fqdn && fqdn !== agent.coolifyDomain) {
-        updates.coolifyDomain = fqdn;
-        agent.coolifyDomain = fqdn;
-      }
-
-      // Update last health check timestamp
-      updates.lastHealthCheck = new Date();
-      agent.lastHealthCheck = new Date();
-
-      if (Object.keys(updates).length > 0) {
-        updates.updatedAt = new Date();
-        await db.update(agents).set(updates).where(eq(agents.id, agentId));
-      }
-    } catch {
-      // Don't fail the GET if Coolify is unreachable
-    }
+  // Sync real status from Coolify
+  const synced = await syncAgentFromCoolify(agent);
+  if (synced) {
+    agent.status = synced.status;
+    if (synced.coolifyDomain) agent.coolifyDomain = synced.coolifyDomain;
   }
 
   return NextResponse.json({ agent });
@@ -117,7 +63,6 @@ export async function PATCH(
   const { agentId } = await params;
   const body = await req.json();
 
-  // Verify ownership
   const existing = await db
     .select()
     .from(agents)
@@ -128,7 +73,6 @@ export async function PATCH(
     return NextResponse.json({ error: "Agent not found" }, { status: 404 });
   }
 
-  // Only allow updating name for now
   const updates: Record<string, unknown> = { updatedAt: new Date() };
   if (body.name) updates.name = body.name;
 
@@ -148,7 +92,6 @@ export async function DELETE(
 
   const { agentId } = await params;
 
-  // Verify ownership
   const existing = await db
     .select()
     .from(agents)

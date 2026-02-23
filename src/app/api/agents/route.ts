@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { agents } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { createAgent } from "@/lib/agents/deployment";
+import { syncAgentFromCoolify } from "@/lib/agents/sync-status";
 import { z } from "zod";
 
 const createAgentSchema = z.object({
@@ -37,6 +38,7 @@ export async function GET(req: NextRequest) {
       name: agents.name,
       status: agents.status,
       telegramSessionStatus: agents.telegramSessionStatus,
+      coolifyAppUuid: agents.coolifyAppUuid,
       coolifyDomain: agents.coolifyDomain,
       lastHealthCheck: agents.lastHealthCheck,
       lastError: agents.lastError,
@@ -47,7 +49,18 @@ export async function GET(req: NextRequest) {
     .where(eq(agents.userId, userId))
     .orderBy(agents.createdAt);
 
-  return NextResponse.json({ agents: userAgents });
+  // Sync status from Coolify for all agents in parallel
+  const synced = await Promise.all(
+    userAgents.map(async (agent) => {
+      const result = await syncAgentFromCoolify(agent);
+      if (result) {
+        return { ...agent, status: result.status, coolifyDomain: result.coolifyDomain || agent.coolifyDomain };
+      }
+      return agent;
+    }),
+  );
+
+  return NextResponse.json({ agents: synced });
 }
 
 export async function POST(req: NextRequest) {
