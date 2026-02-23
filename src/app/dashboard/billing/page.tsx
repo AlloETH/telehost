@@ -17,7 +17,7 @@ interface Payment {
   amountNanoton: string;
   tier: string;
   status: string;
-  txHash: string | null;
+  memo: string | null;
   confirmedAt: string | null;
   createdAt: string;
 }
@@ -48,7 +48,7 @@ export default function BillingPage() {
 
     setPaying(tier);
     try {
-      // 1. Create payment on backend
+      // 1. Create pending payment with memo
       const res = await fetch("/api/billing/subscribe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -60,39 +60,37 @@ export default function BillingPage() {
         throw new Error(data.error);
       }
 
-      const { reference, message } = await res.json();
+      const { paymentId, transaction } = await res.json();
 
-      // 2. Send transaction via TON Connect
+      // 2. Send TON via wallet (memo is baked into the payload)
       await tonConnectUI.sendTransaction({
         validUntil: Math.floor(Date.now() / 1000) + 600,
         messages: [
           {
-            address: message.address,
-            amount: message.amount,
-            payload: message.payload,
+            address: transaction.address,
+            amount: transaction.amount,
+            payload: transaction.payload,
           },
         ],
       });
 
-      // 3. Poll for confirmation
-      const pollInterval = setInterval(async () => {
+      // 3. Confirm payment after wallet approves
+      const verifyRes = await fetch("/api/billing/verify-payment", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paymentId }),
+      });
+
+      if (verifyRes.ok) {
+        // Refresh billing status
         const statusRes = await fetch("/api/billing/status");
         const statusData = await statusRes.json();
-        if (statusData.subscription?.status === "active") {
-          clearInterval(pollInterval);
-          setSubscription(statusData.subscription);
-          setPaymentHistory(statusData.payments || []);
-          setPaying("");
-        }
-      }, 5000);
-
-      // Stop polling after 5 minutes
-      setTimeout(() => {
-        clearInterval(pollInterval);
-        setPaying("");
-      }, 300_000);
+        setSubscription(statusData.subscription);
+        setPaymentHistory(statusData.payments || []);
+      }
     } catch (err) {
       console.error("Payment failed:", err);
+    } finally {
       setPaying("");
     }
   };
@@ -135,7 +133,7 @@ export default function BillingPage() {
           </div>
           <div className="mt-4 grid grid-cols-3 gap-4 text-sm">
             <div>
-              <p className="text-[var(--muted-foreground)]">Renews</p>
+              <p className="text-[var(--muted-foreground)]">Expires</p>
               <p>
                 {new Date(subscription.currentPeriodEnd).toLocaleDateString()}
               </p>
@@ -154,8 +152,12 @@ export default function BillingPage() {
 
       {/* Plans */}
       <h2 className="mt-10 text-lg font-semibold">
-        {subscription ? "Upgrade Plan" : "Choose a Plan"}
+        {subscription ? "Renew or Upgrade" : "Choose a Plan"}
       </h2>
+      <p className="mt-1 text-sm text-[var(--muted-foreground)]">
+        Send TON to subscribe for 30 days. When your plan expires, send again to
+        renew.
+      </p>
       <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
         {(["basic", "pro", "enterprise"] as const).map((key) => {
           const tier = SUBSCRIPTION_TIERS[key];
@@ -186,17 +188,17 @@ export default function BillingPage() {
               </ul>
               <button
                 onClick={() => handleSubscribe(key)}
-                disabled={isCurrent || !!paying}
+                disabled={!!paying}
                 className={`mt-4 w-full rounded-lg px-4 py-2.5 text-sm font-medium transition-opacity ${
-                  isCurrent
-                    ? "bg-[var(--accent)] text-[var(--muted-foreground)] cursor-default"
+                  isCurrent && subscription?.status === "active"
+                    ? "bg-[var(--primary)] text-white hover:opacity-90 disabled:opacity-50"
                     : "bg-[var(--primary)] text-white hover:opacity-90 disabled:opacity-50"
                 }`}
               >
-                {isCurrent
-                  ? "Current Plan"
-                  : paying === key
-                    ? "Processing..."
+                {paying === key
+                  ? "Sending..."
+                  : isCurrent && subscription?.status === "active"
+                    ? `Renew for ${tier.priceTon} TON`
                     : `Subscribe for ${tier.priceTon} TON`}
               </button>
             </div>

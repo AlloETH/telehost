@@ -35,8 +35,8 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       paymentId: result.paymentId,
-      reference: result.reference,
-      message: result.message,
+      memo: result.memo,
+      transaction: result.transaction,
       amount: tierConfig.priceTon,
       tier,
     });

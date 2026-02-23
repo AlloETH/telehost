@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifyPaymentOnChain } from "@/lib/ton/payment";
+import { confirmPayment } from "@/lib/ton/payment";
 import { activateSubscription } from "@/lib/ton/subscription";
 import { db } from "@/lib/db";
 import { payments } from "@/lib/db/schema";
@@ -8,8 +8,7 @@ import { type SubscriptionTier } from "@/lib/constants";
 import { z } from "zod";
 
 const schema = z.object({
-  reference: z.string().min(1),
-  txHash: z.string().min(1),
+  paymentId: z.string().uuid(),
 });
 
 export async function POST(req: NextRequest) {
@@ -27,23 +26,19 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const verified = await verifyPaymentOnChain(
-    parsed.data.reference,
-    parsed.data.txHash,
-  );
-
-  if (!verified) {
+  const confirmed = await confirmPayment(parsed.data.paymentId, userId);
+  if (!confirmed) {
     return NextResponse.json(
-      { error: "Payment verification failed" },
+      { error: "Payment not found or already processed" },
       { status: 400 },
     );
   }
 
-  // Get the payment to find tier
+  // Activate subscription
   const [payment] = await db
     .select()
     .from(payments)
-    .where(eq(payments.tonpayReference, parsed.data.reference))
+    .where(eq(payments.id, parsed.data.paymentId))
     .limit(1);
 
   if (payment) {
@@ -54,5 +49,5 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  return NextResponse.json({ success: true, status: "confirmed" });
+  return NextResponse.json({ status: "confirmed" });
 }

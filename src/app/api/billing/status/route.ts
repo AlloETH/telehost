@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
       amountNanoton: payments.amountNanoton,
       tier: payments.tier,
       status: payments.status,
-      txHash: payments.txHash,
+      memo: payments.memo,
       confirmedAt: payments.confirmedAt,
       createdAt: payments.createdAt,
     })

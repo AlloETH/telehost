@@ -7,7 +7,6 @@ const PUBLIC_PATHS = [
   "/",
   "/api/auth/ton-proof/payload",
   "/api/auth/ton-proof/verify",
-  "/api/webhooks",
 ];
 
 function isPublicPath(pathname: string): boolean {

@@ -173,7 +173,7 @@ export const payments = pgTable(
     amountNanoton: varchar("amount_nanoton", { length: 50 }).notNull(),
     tier: subscriptionTierEnum("tier").notNull(),
     status: paymentStatusEnum("status").notNull().default("pending"),
-    tonpayReference: varchar("tonpay_reference", { length: 255 }),
+    memo: varchar("memo", { length: 255 }),
     txHash: varchar("tx_hash", { length: 100 }),
     senderAddress: varchar("sender_address", { length: 66 }).notNull(),
     recipientAddress: varchar("recipient_address", { length: 66 }).notNull(),
@@ -183,7 +183,7 @@ export const payments = pgTable(
   (table) => [
     index("payments_user_id_idx").on(table.userId),
     uniqueIndex("payments_tx_hash_idx").on(table.txHash),
-    uniqueIndex("payments_tonpay_ref_idx").on(table.tonpayReference),
+    uniqueIndex("payments_memo_idx").on(table.memo),
     index("payments_status_idx").on(table.status),
   ],
 );
