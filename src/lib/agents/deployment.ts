@@ -101,14 +101,6 @@ export async function createAgent(input: CreateAgentInput): Promise<string> {
     "services:",
     "  agent:",
     `    image: ${TELETON_DOCKER_IMAGE}:${TELETON_DOCKER_TAG}`,
-    "    entrypoint: []",
-    `    command: >-`,
-    `      sh -c "`,
-    `      if [ -n \\"$$TELETON_CONFIG_B64\\" ]; then echo \\"$$TELETON_CONFIG_B64\\" | base64 -d > /data/config.yaml; fi &&`,
-    `      if [ -n \\"$$TELETON_SESSION_B64\\" ]; then echo \\"$$TELETON_SESSION_B64\\" | base64 -d > /data/telegram_session.txt; fi &&`,
-    `      if [ -n \\"$$TELETON_WALLET_B64\\" ]; then echo \\"$$TELETON_WALLET_B64\\" | base64 -d > /data/wallet.json && chmod 600 /data/wallet.json; fi &&`,
-    `      mkdir -p /data/workspace &&`,
-    `      exec node dist/cli/index.js start"`,
     "    volumes:",
     `      - teleton-data:/data`,
     "    ports:",
@@ -133,6 +125,9 @@ export async function createAgent(input: CreateAgentInput): Promise<string> {
     name: slug,
     instant_deploy: false,
   });
+
+  // Wait for Coolify to fully index the new application before proceeding
+  await waitForCoolifyApp(coolify, coolifyApp.uuid);
 
   // 6b. Set the FQDN explicitly
   if (agentDomain) {
@@ -346,4 +341,23 @@ async function getAgentOrThrow(agentId: string) {
     throw new Error("Agent not found");
   }
   return results[0];
+}
+
+async function waitForCoolifyApp(
+  coolify: ReturnType<typeof getCoolifyClient>,
+  uuid: string,
+  maxRetries = 10,
+  delayMs = 1500,
+): Promise<void> {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      await coolify.getApp(uuid);
+      return;
+    } catch {
+      if (i === maxRetries - 1) {
+        throw new Error(`Coolify app ${uuid} not ready after ${maxRetries} retries`);
+      }
+      await new Promise((r) => setTimeout(r, delayMs));
+    }
+  }
 }
