@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 
 const LLM_PROVIDERS = [
@@ -17,6 +17,14 @@ export default function NewAgentPage() {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  // Name availability
+  const [nameStatus, setNameStatus] = useState<{
+    checking: boolean;
+    available: boolean | null;
+    slug: string;
+    domain: string;
+  }>({ checking: false, available: null, slug: "", domain: "" });
 
   const [form, setForm] = useState({
     name: "",
@@ -37,6 +45,36 @@ export default function NewAgentPage() {
 
   const update = (field: string, value: string) =>
     setForm((prev) => ({ ...prev, [field]: value }));
+
+  // Debounced name check
+  const checkName = useCallback(async (name: string) => {
+    if (!name.trim()) {
+      setNameStatus({ checking: false, available: null, slug: "", domain: "" });
+      return;
+    }
+
+    setNameStatus((prev) => ({ ...prev, checking: true }));
+
+    try {
+      const res = await fetch(
+        `/api/agents/check-name?name=${encodeURIComponent(name)}`,
+      );
+      const data = await res.json();
+      setNameStatus({
+        checking: false,
+        available: data.available,
+        slug: data.slug || "",
+        domain: data.domain || "",
+      });
+    } catch {
+      setNameStatus((prev) => ({ ...prev, checking: false }));
+    }
+  }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => checkName(form.name), 400);
+    return () => clearTimeout(timer);
+  }, [form.name, checkName]);
 
   const handleSubmit = async () => {
     setLoading(true);
@@ -81,6 +119,8 @@ export default function NewAgentPage() {
     }
   };
 
+  const nameValid = form.name.trim().length > 0 && nameStatus.available === true;
+
   return (
     <div className="mx-auto max-w-2xl">
       <h1 className="text-2xl font-bold">Deploy New Agent</h1>
@@ -106,6 +146,31 @@ export default function NewAgentPage() {
               placeholder="My Teleton Agent"
               className="w-full rounded-lg border border-[var(--border)] bg-[var(--secondary)] px-3 py-2 text-sm focus:border-[var(--primary)] focus:outline-none"
             />
+            {/* Name availability feedback */}
+            {form.name.trim() && (
+              <div className="mt-1.5">
+                {nameStatus.checking ? (
+                  <p className="text-xs text-[var(--muted-foreground)]">
+                    Checking availability...
+                  </p>
+                ) : nameStatus.available === true ? (
+                  <div>
+                    <p className="text-xs text-green-400">
+                      Available as <span className="font-mono">{nameStatus.slug}</span>
+                    </p>
+                    {nameStatus.domain && (
+                      <p className="text-xs text-[var(--muted-foreground)]">
+                        Domain: <span className="font-mono">{nameStatus.domain}</span>
+                      </p>
+                    )}
+                  </div>
+                ) : nameStatus.available === false ? (
+                  <p className="text-xs text-red-400">
+                    Name already taken. Choose a different name.
+                  </p>
+                ) : null}
+              </div>
+            )}
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium">
@@ -144,7 +209,7 @@ export default function NewAgentPage() {
           </div>
           <button
             onClick={() => setStep(2)}
-            disabled={!form.name || !form.apiKey}
+            disabled={!nameValid || !form.apiKey}
             className="rounded-lg bg-[var(--primary)] px-5 py-2.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
           >
             Next: Telegram Setup

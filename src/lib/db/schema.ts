@@ -97,6 +97,7 @@ export const agents = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     name: varchar("name", { length: 100 }).notNull(),
+    slug: varchar("slug", { length: 100 }).notNull(),
     status: agentStatusEnum("status").notNull().default("provisioning"),
 
     // Coolify integration
@@ -130,6 +131,7 @@ export const agents = pgTable(
   (table) => [
     index("agents_user_id_idx").on(table.userId),
     index("agents_status_idx").on(table.status),
+    uniqueIndex("agents_slug_idx").on(table.slug),
     uniqueIndex("agents_coolify_uuid_idx").on(table.coolifyAppUuid),
   ],
 );

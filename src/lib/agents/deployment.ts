@@ -17,6 +17,7 @@ import {
   SUBSCRIPTION_TIERS,
   type SubscriptionTier,
 } from "@/lib/constants";
+import { nameToSlug } from "@/lib/agents/slug";
 
 export interface CreateAgentInput {
   userId: string;
@@ -49,34 +50,55 @@ export async function createAgent(input: CreateAgentInput): Promise<string> {
   //   );
   // }
 
-  // 2. Generate config.yaml and encrypt it
+  // 2. Generate slug and check uniqueness
+  const slug = nameToSlug(name);
+  if (!slug) {
+    throw new Error("Agent name must contain at least one letter or number");
+  }
+
+  const existingSlug = await db
+    .select({ id: agents.id })
+    .from(agents)
+    .where(eq(agents.slug, slug))
+    .limit(1);
+
+  if (existingSlug.length > 0) {
+    throw new Error(`Name "${name}" is already taken. Choose a different name.`);
+  }
+
+  const baseDomain = process.env.AGENT_BASE_DOMAIN;
+  const agentDomain = baseDomain ? `https://${slug}.${baseDomain}` : undefined;
+
+  // 3. Generate config.yaml and encrypt it
   const configYaml = generateConfigYaml(config);
   const encryptedConfig = encrypt(configYaml);
 
-  // 3. Create agent record in DB
+  // 4. Create agent record in DB
   const [agent] = await db
     .insert(agents)
     .values({
       userId,
       name,
+      slug,
       status: "provisioning",
+      coolifyDomain: agentDomain || null,
       configEncrypted: encryptedConfig.ciphertext,
       configIv: encryptedConfig.iv,
       configTag: encryptedConfig.tag + ":" + encryptedConfig.salt,
     })
     .returning();
 
-  // 4. Determine resource limits from subscription tier
+  // 5. Determine resource limits from subscription tier
   const tier: SubscriptionTier =
     sub.length > 0 ? (sub[0].tier as SubscriptionTier) : "basic";
   const tierConfig = SUBSCRIPTION_TIERS[tier];
 
-  // 5. Create Coolify application
+  // 6. Create Coolify application
   const coolify = getCoolifyClient();
   const configB64 = Buffer.from(configYaml).toString("base64");
 
   const appParams: CreateDockerImageAppParams = {
-    name: `teleton-${agent.id.slice(0, 8)}`,
+    name: slug,
     docker_registry_image_name: TELETON_DOCKER_IMAGE,
     docker_registry_image_tag: TELETON_DOCKER_TAG,
     ports_exposes: TELETON_WEBUI_PORT,
@@ -84,6 +106,7 @@ export async function createAgent(input: CreateAgentInput): Promise<string> {
     server_uuid: process.env.COOLIFY_SERVER_UUID!,
     environment_name: process.env.COOLIFY_ENVIRONMENT_NAME || "production",
     instant_deploy: false,
+    domains: agentDomain,
     custom_docker_run_options: `--volume teleton-data-${agent.id}:/data`,
     limits_memory: `${tierConfig.memoryLimitMb}M`,
     limits_cpus: tierConfig.cpuLimit,
@@ -91,7 +114,7 @@ export async function createAgent(input: CreateAgentInput): Promise<string> {
 
   const coolifyApp = await coolify.createDockerImageApp(appParams);
 
-  // 6. Set environment variables
+  // 7. Set environment variables
   await coolify.bulkSetEnvVars(coolifyApp.uuid, [
     {
       key: "TELETON_HOME",
@@ -113,7 +136,7 @@ export async function createAgent(input: CreateAgentInput): Promise<string> {
     },
   ]);
 
-  // 7. Update agent record with Coolify UUID
+  // 8. Update agent record with Coolify UUID
   await db
     .update(agents)
     .set({
