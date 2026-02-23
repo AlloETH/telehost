@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { agents, subscriptions } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { encrypt } from "@/lib/crypto";
+import { generateWallet } from "@/lib/ton/wallet";
 import {
   getCoolifyClient,
   type CreateDockerImageAppParams,
@@ -121,7 +122,24 @@ export async function createAgent(input: CreateAgentInput): Promise<string> {
     await coolify.updateApp(coolifyApp.uuid, { fqdn: agentDomain });
   }
 
-  // 7. Set environment variables
+  // 7. Generate TON wallet
+  const wallet = await generateWallet();
+  const walletJson = JSON.stringify(wallet, null, 2);
+  const walletB64 = Buffer.from(walletJson).toString("base64");
+
+  // Store encrypted mnemonic in DB
+  const encryptedMnemonic = encrypt(wallet.mnemonic.join(" "));
+  await db
+    .update(agents)
+    .set({
+      walletAddress: wallet.address,
+      walletMnemonicEncrypted: encryptedMnemonic.ciphertext,
+      walletMnemonicIv: encryptedMnemonic.iv,
+      walletMnemonicTag: encryptedMnemonic.tag + ":" + encryptedMnemonic.salt,
+    })
+    .where(eq(agents.id, agent.id));
+
+  // 8. Set environment variables
   await coolify.bulkSetEnvVars(coolifyApp.uuid, [
     {
       key: "TELETON_HOME",
@@ -136,6 +154,12 @@ export async function createAgent(input: CreateAgentInput): Promise<string> {
       is_shown_once: true,
     },
     {
+      key: "TELETON_WALLET_B64",
+      value: walletB64,
+      is_literal: true,
+      is_shown_once: true,
+    },
+    {
       key: "NODE_ENV",
       value: "production",
       is_literal: true,
@@ -143,7 +167,7 @@ export async function createAgent(input: CreateAgentInput): Promise<string> {
     },
   ]);
 
-  // 8. Handle session string if provided (wizard flow)
+  // 9. Handle session string if provided (wizard flow)
   if (input.telegramSessionString) {
     const sessionB64 = Buffer.from(input.telegramSessionString).toString("base64");
     await coolify.setEnvVar(coolifyApp.uuid, {

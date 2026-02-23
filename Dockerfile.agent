@@ -3,4 +3,4 @@ USER root
 RUN mkdir -p /data && chmod 777 /data
 USER node
 ENTRYPOINT []
-CMD ["sh", "-c", "if [ -n \"$TELETON_CONFIG_B64\" ]; then echo \"$TELETON_CONFIG_B64\" | base64 -d > /data/config.yaml; fi && if [ -n \"$TELETON_SESSION_B64\" ]; then echo \"$TELETON_SESSION_B64\" | base64 -d > /data/telegram_session.txt; fi && mkdir -p /data/workspace && exec node dist/cli/index.js start"]
+CMD ["sh", "-c", "if [ -n \"$TELETON_CONFIG_B64\" ]; then echo \"$TELETON_CONFIG_B64\" | base64 -d > /data/config.yaml; fi && if [ -n \"$TELETON_SESSION_B64\" ]; then echo \"$TELETON_SESSION_B64\" | base64 -d > /data/telegram_session.txt; fi && if [ -n \"$TELETON_WALLET_B64\" ]; then echo \"$TELETON_WALLET_B64\" | base64 -d > /data/wallet.json && chmod 600 /data/wallet.json; fi && mkdir -p /data/workspace && exec node dist/cli/index.js start"]

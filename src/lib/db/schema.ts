@@ -122,6 +122,12 @@ export const agents = pgTable(
     // WebUI auth token (stored plain — not sensitive like API keys)
     webuiAuthToken: varchar("webui_auth_token", { length: 100 }),
 
+    // TON wallet
+    walletAddress: varchar("wallet_address", { length: 100 }),
+    walletMnemonicEncrypted: text("wallet_mnemonic_encrypted"),
+    walletMnemonicIv: varchar("wallet_mnemonic_iv", { length: 64 }),
+    walletMnemonicTag: varchar("wallet_mnemonic_tag", { length: 128 }),
+
     // Metadata
     lastHealthCheck: timestamp("last_health_check"),
     lastError: text("last_error"),

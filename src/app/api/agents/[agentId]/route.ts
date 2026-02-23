@@ -25,6 +25,7 @@ export async function GET(
       coolifyAppUuid: agents.coolifyAppUuid,
       coolifyDomain: agents.coolifyDomain,
       webuiAuthToken: agents.webuiAuthToken,
+      walletAddress: agents.walletAddress,
       lastHealthCheck: agents.lastHealthCheck,
       lastError: agents.lastError,
       restartCount: agents.restartCount,

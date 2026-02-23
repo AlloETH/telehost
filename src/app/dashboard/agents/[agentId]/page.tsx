@@ -10,6 +10,7 @@ interface Agent {
   telegramSessionStatus: string;
   coolifyDomain: string | null;
   webuiAuthToken: string | null;
+  walletAddress: string | null;
   lastHealthCheck: string | null;
   lastError: string | null;
   restartCount: number;
@@ -217,6 +218,7 @@ export default function AgentDetailPage({
           value={new Date(agent.createdAt).toLocaleString()}
         />
         <DomainCard domain={agent.coolifyDomain} />
+        <WalletCard address={agent.walletAddress} />
         {agent.webuiAuthToken && (
           <AuthTokenCard token={agent.webuiAuthToken} />
         )}
@@ -248,6 +250,50 @@ function DomainCard({ domain }: { domain: string | null }) {
       >
         {domain}
       </a>
+    </div>
+  );
+}
+
+function WalletCard({ address }: { address: string | null }) {
+  const [copied, setCopied] = useState(false);
+
+  if (!address) {
+    return (
+      <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4">
+        <p className="text-xs text-[var(--muted-foreground)]">TON Wallet</p>
+        <p className="mt-1 font-medium text-[var(--muted-foreground)]">Not generated</p>
+      </div>
+    );
+  }
+
+  const copy = () => {
+    navigator.clipboard.writeText(address);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const explorerUrl = `https://tonviewer.com/${address}`;
+  const short = address.slice(0, 8) + "..." + address.slice(-6);
+
+  return (
+    <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4">
+      <p className="text-xs text-[var(--muted-foreground)]">TON Wallet</p>
+      <div className="mt-1 flex items-center gap-2">
+        <a
+          href={explorerUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="font-mono text-sm text-[var(--primary)] hover:underline"
+        >
+          {short}
+        </a>
+        <button
+          onClick={copy}
+          className="text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+        >
+          {copied ? "Copied!" : "Copy"}
+        </button>
+      </div>
     </div>
   );
 }
