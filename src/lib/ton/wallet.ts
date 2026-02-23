@@ -10,6 +10,25 @@ export interface WalletData {
 }
 
 /**
+ * Reconstruct wallet JSON from stored mnemonic and address.
+ */
+export async function reconstructWalletJson(
+  mnemonic: string[],
+  address: string,
+  createdAt: string,
+): Promise<string> {
+  const keyPair = await mnemonicToPrivateKey(mnemonic);
+  const data: WalletData = {
+    version: "w5r1",
+    address,
+    publicKey: keyPair.publicKey.toString("hex"),
+    mnemonic,
+    createdAt,
+  };
+  return JSON.stringify(data, null, 2);
+}
+
+/**
  * Generate a new TON W5R1 wallet with a 24-word mnemonic.
  * Compatible with teleton-agent's wallet.json format.
  */

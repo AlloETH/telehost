@@ -1,8 +1,8 @@
 import { db } from "@/lib/db";
 import { agents, subscriptions } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
-import { encrypt } from "@/lib/crypto";
-import { generateWallet } from "@/lib/ton/wallet";
+import { encrypt, decrypt } from "@/lib/crypto";
+import { generateWallet, reconstructWalletJson } from "@/lib/ton/wallet";
 import { getCoolifyClient } from "@/lib/coolify/client";
 import {
   generateConfigWithToken,
@@ -16,6 +16,137 @@ import {
   type SubscriptionTier,
 } from "@/lib/constants";
 import { nameToSlug } from "@/lib/agents/slug";
+
+// Build Docker Compose YAML with actual env var values embedded directly.
+function buildComposeYaml(opts: {
+  configB64?: string;
+  walletB64?: string;
+  sessionB64?: string;
+  memoryLimitMb: number;
+  cpuLimit: string;
+  domain?: string; // e.g. "https://slug.tokn.deal"
+}): string {
+  const lines = [
+    "services:",
+    "  agent:",
+    `    image: ${TELETON_DOCKER_IMAGE}:${TELETON_DOCKER_TAG}`,
+    "    volumes:",
+    "      - teleton-data:/data",
+    "    ports:",
+    `      - "${TELETON_WEBUI_PORT}:${TELETON_WEBUI_PORT}"`,
+  ];
+
+  // Add Traefik labels for public domain access
+  if (opts.domain) {
+    const hostname = opts.domain.replace(/^https?:\/\//, "");
+    lines.push(
+      "    labels:",
+      "      - traefik.enable=true",
+      `      - "traefik.http.routers.agent.rule=Host(\`${hostname}\`)"`,
+      "      - traefik.http.routers.agent.entryPoints=https",
+      "      - traefik.http.routers.agent.tls=true",
+      "      - traefik.http.routers.agent.tls.certresolver=letsencrypt",
+      `      - traefik.http.services.agent.loadbalancer.server.port=${TELETON_WEBUI_PORT}`,
+    );
+  }
+
+  lines.push(
+    "    environment:",
+    "      - TELETON_HOME=/data",
+    "      - NODE_ENV=production",
+    `      - TELETON_CONFIG_B64=${opts.configB64 || ""}`,
+    `      - TELETON_SESSION_B64=${opts.sessionB64 || ""}`,
+    `      - TELETON_WALLET_B64=${opts.walletB64 || ""}`,
+    "    deploy:",
+    "      resources:",
+    "        limits:",
+    `          memory: ${opts.memoryLimitMb}M`,
+    `          cpus: '${opts.cpuLimit}'`,
+    "volumes:",
+    "  teleton-data:",
+  );
+
+  return lines.join("\n");
+}
+
+// Rebuild compose YAML from DB data and update it in Coolify.
+// Pass overrides for values you already have to avoid unnecessary decryption.
+export async function rebuildAndUpdateCompose(
+  agentId: string,
+  overrides?: {
+    configB64?: string;
+    sessionB64?: string;
+    walletB64?: string;
+  },
+): Promise<void> {
+  const agent = await getAgentOrThrow(agentId);
+  if (!agent.coolifyAppUuid) return;
+
+  // Determine resource limits from subscription tier
+  const sub = await db
+    .select()
+    .from(subscriptions)
+    .where(
+      and(eq(subscriptions.userId, agent.userId), eq(subscriptions.status, "active")),
+    )
+    .limit(1);
+  const tier: SubscriptionTier =
+    sub.length > 0 ? (sub[0].tier as SubscriptionTier) : "basic";
+  const tierConfig = SUBSCRIPTION_TIERS[tier];
+
+  // Reconstruct config B64
+  let configB64 = overrides?.configB64;
+  if (!configB64 && agent.configEncrypted && agent.configIv && agent.configTag) {
+    const [tag, salt] = agent.configTag.split(":");
+    const yaml = decrypt({ ciphertext: agent.configEncrypted, iv: agent.configIv, tag, salt });
+    configB64 = Buffer.from(yaml).toString("base64");
+  }
+
+  // Reconstruct wallet B64
+  let walletB64 = overrides?.walletB64;
+  if (!walletB64 && agent.walletMnemonicEncrypted && agent.walletMnemonicIv && agent.walletMnemonicTag) {
+    const [tag, salt] = agent.walletMnemonicTag.split(":");
+    const mnemonicStr = decrypt({
+      ciphertext: agent.walletMnemonicEncrypted,
+      iv: agent.walletMnemonicIv,
+      tag,
+      salt,
+    });
+    const walletJson = await reconstructWalletJson(
+      mnemonicStr.split(" "),
+      agent.walletAddress || "",
+      (agent.createdAt ?? new Date()).toISOString(),
+    );
+    walletB64 = Buffer.from(walletJson).toString("base64");
+  }
+
+  // Reconstruct session B64
+  let sessionB64 = overrides?.sessionB64;
+  if (!sessionB64 && agent.telegramSessionEncrypted && agent.telegramSessionIv && agent.telegramSessionTag) {
+    const [tag, salt] = agent.telegramSessionTag.split(":");
+    const session = decrypt({
+      ciphertext: agent.telegramSessionEncrypted,
+      iv: agent.telegramSessionIv,
+      tag,
+      salt,
+    });
+    sessionB64 = Buffer.from(session).toString("base64");
+  }
+
+  const composeYaml = buildComposeYaml({
+    configB64,
+    walletB64,
+    sessionB64,
+    memoryLimitMb: tierConfig.memoryLimitMb,
+    cpuLimit: tierConfig.cpuLimit,
+    domain: agent.coolifyDomain || undefined,
+  });
+
+  const coolify = getCoolifyClient();
+  await coolify.updateService(agent.coolifyAppUuid, {
+    docker_compose_raw: Buffer.from(composeYaml).toString("base64"),
+  });
+}
 
 export interface CreateAgentInput {
   userId: string;
@@ -37,17 +168,6 @@ export async function createAgent(input: CreateAgentInput): Promise<string> {
     .limit(1);
 
   // TODO: re-enable subscription limits after testing
-  // const maxAgents = sub.length > 0 ? sub[0].maxAgents : 1;
-  // const agentCountResult = await db
-  //   .select({ count: sql<number>`count(*)` })
-  //   .from(agents)
-  //   .where(eq(agents.userId, userId));
-  // const currentAgents = Number(agentCountResult[0]?.count ?? 0);
-  // if (currentAgents >= maxAgents) {
-  //   throw new Error(
-  //     `Agent limit reached (${currentAgents}/${maxAgents}). Upgrade your subscription.`,
-  //   );
-  // }
 
   // 2. Generate slug and check uniqueness
   const slug = nameToSlug(name);
@@ -93,38 +213,22 @@ export async function createAgent(input: CreateAgentInput): Promise<string> {
     sub.length > 0 ? (sub[0].tier as SubscriptionTier) : "basic";
   const tierConfig = SUBSCRIPTION_TIERS[tier];
 
-  // 6. Create Coolify application via Docker Compose (for persistent volume support)
+  // 6. Create Coolify service via Docker Compose (POST /services)
   const coolify = getCoolifyClient();
   const configB64 = Buffer.from(configYaml).toString("base64");
 
-  const composeYaml = [
-    "services:",
-    "  agent:",
-    `    image: ${TELETON_DOCKER_IMAGE}:${TELETON_DOCKER_TAG}`,
-    "    volumes:",
-    `      - teleton-data:/data`,
-    "    ports:",
-    `      - "${TELETON_WEBUI_PORT}:${TELETON_WEBUI_PORT}"`,
-    "    environment:",
-    "      - TELETON_HOME=/data",
-    "      - NODE_ENV=production",
-    "      - TELETON_CONFIG_B64=${TELETON_CONFIG_B64:-}",
-    "      - TELETON_SESSION_B64=${TELETON_SESSION_B64:-}",
-    "      - TELETON_WALLET_B64=${TELETON_WALLET_B64:-}",
-    "    deploy:",
-    "      resources:",
-    "        limits:",
-    `          memory: ${tierConfig.memoryLimitMb}M`,
-    `          cpus: '${tierConfig.cpuLimit}'`,
-    "volumes:",
-    "  teleton-data:",
-  ].join("\n");
+  const initialComposeYaml = buildComposeYaml({
+    configB64,
+    memoryLimitMb: tierConfig.memoryLimitMb,
+    cpuLimit: tierConfig.cpuLimit,
+    domain: agentDomain,
+  });
 
-  const coolifyApp = await coolify.createDockerComposeApp({
+  const coolifyService = await coolify.createService({
     project_uuid: process.env.COOLIFY_PROJECT_UUID!,
     server_uuid: process.env.COOLIFY_SERVER_UUID!,
     environment_name: process.env.COOLIFY_ENVIRONMENT_NAME || "production",
-    docker_compose_raw: Buffer.from(composeYaml).toString("base64"),
+    docker_compose_raw: Buffer.from(initialComposeYaml).toString("base64"),
     name: slug,
     instant_deploy: false,
   });
@@ -132,20 +236,11 @@ export async function createAgent(input: CreateAgentInput): Promise<string> {
   // Save Coolify UUID immediately so cleanup works even if later steps fail
   await db
     .update(agents)
-    .set({ coolifyAppUuid: coolifyApp.uuid, updatedAt: new Date() })
+    .set({ coolifyAppUuid: coolifyService.uuid, updatedAt: new Date() })
     .where(eq(agents.id, agent.id));
 
-  // Wait for Coolify to fully index the new application before proceeding
-  await waitForCoolifyApp(coolify, coolifyApp.uuid);
-
-  // 6b. Set the domain for the compose service
-  if (agentDomain) {
-    await coolify.updateApp(coolifyApp.uuid, {
-      docker_compose_domains: [
-        { name: "agent", domain: agentDomain },
-      ],
-    });
-  }
+  // Wait for Coolify to fully index the new service
+  await waitForCoolifyService(coolify, coolifyService.uuid);
 
   // 7. Generate TON wallet
   const wallet = await generateWallet();
@@ -164,31 +259,10 @@ export async function createAgent(input: CreateAgentInput): Promise<string> {
     })
     .where(eq(agents.id, agent.id));
 
-  // 8. Set secret environment variables (non-secrets are in compose file)
-  await coolify.bulkSetEnvVars(coolifyApp.uuid, [
-    {
-      key: "TELETON_CONFIG_B64",
-      value: configB64,
-      is_literal: true,
-      is_shown_once: true,
-    },
-    {
-      key: "TELETON_WALLET_B64",
-      value: walletB64,
-      is_literal: true,
-      is_shown_once: true,
-    },
-  ]);
-
-  // 9. Handle session string if provided (wizard flow)
+  // 8. Handle session string if provided (wizard flow)
+  let sessionB64: string | undefined;
   if (input.telegramSessionString) {
-    const sessionB64 = Buffer.from(input.telegramSessionString).toString("base64");
-    await coolify.setEnvVar(coolifyApp.uuid, {
-      key: "TELETON_SESSION_B64",
-      value: sessionB64,
-      is_literal: true,
-      is_shown_once: true,
-    });
+    sessionB64 = Buffer.from(input.telegramSessionString).toString("base64");
 
     const encryptedSession = encrypt(input.telegramSessionString);
     await db
@@ -202,9 +276,6 @@ export async function createAgent(input: CreateAgentInput): Promise<string> {
         updatedAt: new Date(),
       })
       .where(eq(agents.id, agent.id));
-
-    // Auto-deploy since session is ready
-    await coolify.deployApp(coolifyApp.uuid);
   } else {
     await db
       .update(agents)
@@ -215,28 +286,34 @@ export async function createAgent(input: CreateAgentInput): Promise<string> {
       .where(eq(agents.id, agent.id));
   }
 
+  // 9. Update compose with all B64 secrets embedded directly
+  const finalComposeYaml = buildComposeYaml({
+    configB64,
+    walletB64,
+    sessionB64,
+    memoryLimitMb: tierConfig.memoryLimitMb,
+    cpuLimit: tierConfig.cpuLimit,
+    domain: agentDomain,
+  });
+  await coolify.updateService(coolifyService.uuid, {
+    docker_compose_raw: Buffer.from(finalComposeYaml).toString("base64"),
+  });
+
+  // 10. Deploy if session is ready
+  if (input.telegramSessionString) {
+    await coolify.deployService(coolifyService.uuid);
+  }
+
   return agent.id;
 }
 
 export async function startAgent(agentId: string): Promise<void> {
   const agent = await getAgentOrThrow(agentId);
   if (!agent.coolifyAppUuid) {
-    throw new Error("Agent has no Coolify application — try recreating it");
+    throw new Error("Agent has no Coolify service — try recreating it");
   }
   const coolify = getCoolifyClient();
-
-  // Use deploy for first launch or after awaiting_session (never deployed before),
-  // use start for previously stopped agents
-  if (
-    agent.status === "awaiting_session" ||
-    agent.status === "provisioning" ||
-    agent.status === "error"
-  ) {
-    await coolify.deployApp(agent.coolifyAppUuid);
-  } else {
-    await coolify.startApp(agent.coolifyAppUuid);
-  }
-
+  await coolify.deployService(agent.coolifyAppUuid);
   await db
     .update(agents)
     .set({ status: "starting", updatedAt: new Date() })
@@ -246,10 +323,10 @@ export async function startAgent(agentId: string): Promise<void> {
 export async function stopAgent(agentId: string): Promise<void> {
   const agent = await getAgentOrThrow(agentId);
   if (!agent.coolifyAppUuid) {
-    throw new Error("Agent has no Coolify application");
+    throw new Error("Agent has no Coolify service");
   }
   const coolify = getCoolifyClient();
-  await coolify.stopApp(agent.coolifyAppUuid);
+  await coolify.stopService(agent.coolifyAppUuid);
   await db
     .update(agents)
     .set({ status: "stopped", stoppedAt: new Date(), updatedAt: new Date() })
@@ -259,10 +336,10 @@ export async function stopAgent(agentId: string): Promise<void> {
 export async function restartAgent(agentId: string): Promise<void> {
   const agent = await getAgentOrThrow(agentId);
   if (!agent.coolifyAppUuid) {
-    throw new Error("Agent has no Coolify application");
+    throw new Error("Agent has no Coolify service");
   }
   const coolify = getCoolifyClient();
-  await coolify.restartApp(agent.coolifyAppUuid);
+  await coolify.restartService(agent.coolifyAppUuid);
   await db
     .update(agents)
     .set({ status: "starting", updatedAt: new Date() })
@@ -272,10 +349,12 @@ export async function restartAgent(agentId: string): Promise<void> {
 export async function redeployAgent(agentId: string): Promise<void> {
   const agent = await getAgentOrThrow(agentId);
   if (!agent.coolifyAppUuid) {
-    throw new Error("Agent has no Coolify application");
+    throw new Error("Agent has no Coolify service");
   }
+  // Rebuild compose to ensure env vars are embedded directly
+  await rebuildAndUpdateCompose(agentId);
   const coolify = getCoolifyClient();
-  await coolify.deployApp(agent.coolifyAppUuid, true);
+  await coolify.deployService(agent.coolifyAppUuid);
   await db
     .update(agents)
     .set({ status: "starting", updatedAt: new Date() })
@@ -293,9 +372,9 @@ export async function deleteAgent(agentId: string): Promise<void> {
   if (agent.coolifyAppUuid) {
     const coolify = getCoolifyClient();
     try {
-      await coolify.deleteApp(agent.coolifyAppUuid);
+      await coolify.deleteService(agent.coolifyAppUuid);
     } catch (err) {
-      console.error(`Failed to delete Coolify app ${agent.coolifyAppUuid}:`, err);
+      console.error(`Failed to delete Coolify service ${agent.coolifyAppUuid}:`, err);
     }
   }
 
@@ -308,10 +387,10 @@ export async function getAgentLogs(
 ): Promise<string> {
   const agent = await getAgentOrThrow(agentId);
   if (!agent.coolifyAppUuid) {
-    throw new Error("Agent has no Coolify application");
+    throw new Error("Agent has no Coolify service");
   }
-  const coolify = getCoolifyClient();
-  return coolify.getAppLogs(agent.coolifyAppUuid, { tail: tail ?? 100 });
+  // Logs are not available via the services API — return a placeholder
+  return `Service ${agent.coolifyAppUuid} — check Coolify UI for container logs.`;
 }
 
 export async function injectTelegramSession(
@@ -320,7 +399,7 @@ export async function injectTelegramSession(
 ): Promise<void> {
   const agent = await getAgentOrThrow(agentId);
   if (!agent.coolifyAppUuid) {
-    throw new Error("Agent has no Coolify application");
+    throw new Error("Agent has no Coolify service");
   }
 
   // Encrypt session for DB storage
@@ -339,15 +418,9 @@ export async function injectTelegramSession(
     })
     .where(eq(agents.id, agentId));
 
-  // Inject session into container via Coolify env var
+  // Rebuild compose with session embedded directly
   const sessionB64 = Buffer.from(sessionString).toString("base64");
-  const coolify = getCoolifyClient();
-  await coolify.setEnvVar(agent.coolifyAppUuid, {
-    key: "TELETON_SESSION_B64",
-    value: sessionB64,
-    is_literal: true,
-    is_shown_once: true,
-  });
+  await rebuildAndUpdateCompose(agentId, { sessionB64 });
 }
 
 async function getAgentOrThrow(agentId: string) {
@@ -363,19 +436,22 @@ async function getAgentOrThrow(agentId: string) {
   return results[0];
 }
 
-async function waitForCoolifyApp(
+async function waitForCoolifyService(
   coolify: ReturnType<typeof getCoolifyClient>,
   uuid: string,
-  maxRetries = 10,
-  delayMs = 1500,
+  maxRetries = 30,
+  delayMs = 2000,
 ): Promise<void> {
   for (let i = 0; i < maxRetries; i++) {
     try {
-      await coolify.getApp(uuid);
+      await coolify.getService(uuid);
       return;
-    } catch {
+    } catch (err) {
       if (i === maxRetries - 1) {
-        throw new Error(`Coolify app ${uuid} not ready after ${maxRetries} retries`);
+        const detail = err instanceof Error ? err.message : String(err);
+        throw new Error(
+          `Coolify service ${uuid} not ready after ${maxRetries} retries (${detail})`,
+        );
       }
       await new Promise((r) => setTimeout(r, delayMs));
     }

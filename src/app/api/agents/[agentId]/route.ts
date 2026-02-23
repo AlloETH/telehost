@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { agents } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
-import { deleteAgent } from "@/lib/agents/deployment";
+import { deleteAgent, rebuildAndUpdateCompose } from "@/lib/agents/deployment";
 import { syncAgentFromCoolify } from "@/lib/agents/sync-status";
 import { encrypt, decrypt } from "@/lib/crypto";
 import { generateConfigYaml } from "@/lib/agents/config-generator";
@@ -154,8 +154,7 @@ export async function PATCH(
 
       if (agent.coolifyAppUuid) {
         const coolify = getCoolifyClient();
-        await coolify.updateApp(agent.coolifyAppUuid, {
-          docker_compose_domains: [{ name: "agent", domain: newDomain }],
+        await coolify.updateService(agent.coolifyAppUuid, {
           name: newSlug,
         });
         needsRedeploy = true;
@@ -165,6 +164,7 @@ export async function PATCH(
 
   // Handle config field changes
   const hasConfigChanges = CONFIG_FIELDS.some((f) => body[f] !== undefined);
+  let newConfigB64: string | undefined;
 
   if (hasConfigChanges) {
     // Decrypt current config
@@ -217,27 +217,20 @@ export async function PATCH(
     dbUpdates.configEncrypted = encrypted.ciphertext;
     dbUpdates.configIv = encrypted.iv;
     dbUpdates.configTag = encrypted.tag + ":" + encrypted.salt;
+    newConfigB64 = Buffer.from(newYaml).toString("base64");
 
-    // Update Coolify env var
     if (agent.coolifyAppUuid) {
-      const configB64 = Buffer.from(newYaml).toString("base64");
-      const coolify = getCoolifyClient();
-      await coolify.setEnvVar(agent.coolifyAppUuid, {
-        key: "TELETON_CONFIG_B64",
-        value: configB64,
-        is_literal: true,
-        is_shown_once: true,
-      });
       needsRedeploy = true;
     }
   }
 
   await db.update(agents).set(dbUpdates).where(eq(agents.id, agentId));
 
-  // Redeploy if Coolify env vars were changed
+  // Rebuild compose with updated values and redeploy
   if (needsRedeploy && agent.coolifyAppUuid) {
+    await rebuildAndUpdateCompose(agentId, { configB64: newConfigB64 });
     const coolify = getCoolifyClient();
-    await coolify.deployApp(agent.coolifyAppUuid);
+    await coolify.deployService(agent.coolifyAppUuid);
   }
 
   return NextResponse.json({ success: true, redeployed: needsRedeploy });

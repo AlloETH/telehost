@@ -55,18 +55,12 @@ export async function POST(
     })
     .where(eq(agents.id, agentId));
 
-  // Inject wallet into Coolify container
+  // Update compose with wallet and redeploy
   if (agent.coolifyAppUuid) {
+    const { rebuildAndUpdateCompose } = await import("@/lib/agents/deployment");
+    await rebuildAndUpdateCompose(agentId, { walletB64 });
     const coolify = getCoolifyClient();
-    await coolify.setEnvVar(agent.coolifyAppUuid, {
-      key: "TELETON_WALLET_B64",
-      value: walletB64,
-      is_literal: true,
-      is_shown_once: true,
-    });
-
-    // Redeploy so container picks up the new env var
-    await coolify.deployApp(agent.coolifyAppUuid);
+    await coolify.deployService(agent.coolifyAppUuid);
   }
 
   return NextResponse.json({

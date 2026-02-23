@@ -56,13 +56,13 @@ export async function syncAgentFromCoolify(agent: AgentForSync): Promise<SyncRes
 
   try {
     const coolify = getCoolifyClient();
-    const coolifyApp = await coolify.getApp(agent.coolifyAppUuid);
+    const coolifyService = await coolify.getService(agent.coolifyAppUuid);
 
-    console.log(`[sync] Agent ${agent.id} (db=${agent.status}): Coolify response status="${coolifyApp.status}", fqdn="${coolifyApp.fqdn}"`, JSON.stringify(Object.keys(coolifyApp)));
+    console.log(`[sync] Agent ${agent.id} (db=${agent.status}): Coolify response status="${coolifyService.status}", fqdn="${coolifyService.fqdn}"`, JSON.stringify(Object.keys(coolifyService)));
 
-    const rawStatus = coolifyApp.status ? String(coolifyApp.status) : null;
+    const rawStatus = coolifyService.status ? String(coolifyService.status) : null;
     const mappedStatus = mapCoolifyStatus(rawStatus, agent.status);
-    const fqdn = coolifyApp.fqdn ? String(coolifyApp.fqdn) : null;
+    const fqdn = coolifyService.fqdn ? String(coolifyService.fqdn) : null;
 
     console.log(`[sync] Agent ${agent.id}: raw="${rawStatus}" → mapped="${mappedStatus}" (was "${agent.status}")`);
 

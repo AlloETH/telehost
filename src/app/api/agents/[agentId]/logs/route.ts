@@ -2,8 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { agents } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
-import { getAgentLogs } from "@/lib/agents/deployment";
-import { getCoolifyClient } from "@/lib/coolify/client";
 
 export async function GET(
   req: NextRequest,
@@ -15,7 +13,6 @@ export async function GET(
   }
 
   const { agentId } = await params;
-  const tail = Number(req.nextUrl.searchParams.get("tail")) || 100;
 
   const existing = await db
     .select()
@@ -31,52 +28,15 @@ export async function GET(
 
   if (!agent.coolifyAppUuid) {
     return NextResponse.json({
-      logs: "Agent has no Coolify application yet.",
+      logs: "Agent has no Coolify service yet.",
       type: "info",
     });
   }
 
-  try {
-    const coolify = getCoolifyClient();
-
-    // For non-running states, try deployment logs first
-    if (["provisioning", "starting", "awaiting_session", "stopped", "error"].includes(agent.status)) {
-      try {
-        const deployments = await coolify.getDeployments(agent.coolifyAppUuid);
-        if (deployments.length > 0) {
-          const latest = deployments[0];
-          const deploymentLogs = await coolify.getDeploymentLogs(
-            agent.coolifyAppUuid,
-            latest.deployment_uuid,
-          );
-          // Also try runtime logs in case container started briefly
-          let runtimeLogs = "";
-          try {
-            runtimeLogs = await getAgentLogs(agentId, tail);
-          } catch {
-            // No runtime logs available
-          }
-
-          const combined = runtimeLogs
-            ? `=== Deployment Logs (${latest.status}) ===\n${deploymentLogs}\n\n=== Container Logs ===\n${runtimeLogs}`
-            : deploymentLogs;
-
-          return NextResponse.json({
-            logs: combined || "No logs available yet. Deployment may still be starting.",
-            type: "deployment",
-            deploymentStatus: latest.status,
-          });
-        }
-      } catch {
-        // Deployment logs not available, fall through to runtime logs
-      }
-    }
-
-    // Default: fetch runtime container logs
-    const logs = await getAgentLogs(agentId, tail);
-    return NextResponse.json({ logs: logs || "No logs available.", type: "runtime" });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 500 });
-  }
+  // The Coolify Services API does not expose a logs endpoint.
+  // Direct the user to the Coolify dashboard for container logs.
+  return NextResponse.json({
+    logs: `Service UUID: ${agent.coolifyAppUuid}\nCheck the Coolify dashboard for container logs.`,
+    type: "info",
+  });
 }

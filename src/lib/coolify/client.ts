@@ -8,27 +8,13 @@ export class CoolifyApiError extends Error {
   }
 }
 
-export interface CreateDockerImageAppParams {
-  name: string;
-  docker_registry_image_name: string;
-  docker_registry_image_tag?: string;
-  ports_exposes: string;
-  project_uuid: string;
-  server_uuid: string;
-  environment_name: string;
-  domains?: string;
-  instant_deploy?: boolean;
-  custom_docker_run_options?: string;
-  limits_memory?: string;
-  limits_cpus?: string;
-}
-
-export interface CreateDockerComposeAppParams {
+export interface CreateServiceParams {
   project_uuid: string;
   server_uuid: string;
   environment_name: string;
   docker_compose_raw: string;
   name?: string;
+  description?: string;
   instant_deploy?: boolean;
 }
 
@@ -41,7 +27,7 @@ export interface EnvVar {
   is_shown_once?: boolean;
 }
 
-export interface CoolifyApp {
+export interface CoolifyService {
   uuid: string;
   name: string;
   status: string;
@@ -91,127 +77,59 @@ class CoolifyClient {
     return res.text() as unknown as T;
   }
 
-  // === Applications ===
+  // === Services (Docker Compose) ===
 
-  async createDockerImageApp(
-    params: CreateDockerImageAppParams,
+  async createService(
+    params: CreateServiceParams,
   ): Promise<{ uuid: string }> {
-    return this.request("POST", "/applications/dockerimage", params);
+    return this.request("POST", "/services", params);
   }
 
-  async createDockerComposeApp(
-    params: CreateDockerComposeAppParams,
-  ): Promise<{ uuid: string }> {
-    return this.request("POST", "/applications/dockercompose", params);
+  async getService(uuid: string): Promise<CoolifyService> {
+    return this.request("GET", `/services/${uuid}`);
   }
 
-  async getApp(uuid: string): Promise<CoolifyApp> {
-    return this.request("GET", `/applications/${uuid}`);
-  }
-
-  async updateApp(
+  async updateService(
     uuid: string,
     params: Record<string, unknown>,
   ): Promise<void> {
-    await this.request("PATCH", `/applications/${uuid}`, params);
+    await this.request("PATCH", `/services/${uuid}`, params);
   }
 
-  async deleteApp(uuid: string): Promise<void> {
-    await this.request("DELETE", `/applications/${uuid}`);
+  async deleteService(uuid: string): Promise<void> {
+    await this.request("DELETE", `/services/${uuid}`);
   }
 
   // === Lifecycle ===
 
-  async deployApp(uuid: string, force?: boolean): Promise<void> {
-    const query = force ? "?force=true" : "";
-    await this.request("POST", `/applications/${uuid}/start${query}`);
+  async deployService(uuid: string): Promise<void> {
+    await this.request("POST", `/services/${uuid}/start`);
   }
 
-  async startApp(uuid: string): Promise<void> {
-    await this.request("POST", `/applications/${uuid}/start`);
+  async stopService(uuid: string): Promise<void> {
+    await this.request("POST", `/services/${uuid}/stop`);
   }
 
-  async stopApp(uuid: string): Promise<void> {
-    await this.request("POST", `/applications/${uuid}/stop`);
-  }
-
-  async restartApp(uuid: string): Promise<void> {
-    await this.request("POST", `/applications/${uuid}/restart`);
+  async restartService(uuid: string): Promise<void> {
+    await this.request("POST", `/services/${uuid}/restart`);
   }
 
   // === Environment Variables ===
 
-  async setEnvVar(uuid: string, envVar: EnvVar): Promise<void> {
-    await this.request("POST", `/applications/${uuid}/envs`, envVar);
+  async setServiceEnvVar(uuid: string, envVar: EnvVar): Promise<void> {
+    await this.request("POST", `/services/${uuid}/envs`, envVar);
   }
 
-  async bulkSetEnvVars(uuid: string, envVars: EnvVar[]): Promise<void> {
-    await this.request("PATCH", `/applications/${uuid}/envs/bulk`, {
+  async bulkSetServiceEnvVars(uuid: string, envVars: EnvVar[]): Promise<void> {
+    await this.request("PATCH", `/services/${uuid}/envs/bulk`, {
       data: envVars,
     });
-  }
-
-  // === Logs ===
-
-  async getAppLogs(
-    uuid: string,
-    opts?: { since?: number; tail?: number },
-  ): Promise<string> {
-    const params = new URLSearchParams();
-    if (opts?.since) params.set("since", String(opts.since));
-    if (opts?.tail) params.set("lines", String(opts.tail));
-    const query = params.toString() ? `?${params.toString()}` : "";
-    const result = await this.request<unknown>("GET", `/applications/${uuid}/logs${query}`);
-    if (typeof result === "string") return result;
-    if (typeof result === "object" && result !== null) {
-      const obj = result as Record<string, unknown>;
-      if (typeof obj.logs === "string") return obj.logs;
-      if (Array.isArray(obj.logs)) return obj.logs.join("\n");
-      return JSON.stringify(result, null, 2);
-    }
-    return String(result);
-  }
-
-  // === Deployments ===
-
-  async getDeployments(
-    uuid: string,
-  ): Promise<Array<{ id: number; deployment_uuid: string; status: string; created_at: string }>> {
-    const result = await this.request<unknown>("GET", `/deployments/applications/${uuid}`);
-    if (Array.isArray(result)) return result;
-    if (typeof result === "object" && result !== null) {
-      const obj = result as Record<string, unknown>;
-      if (Array.isArray(obj.data)) return obj.data;
-      if (Array.isArray(obj.deployments)) return obj.deployments;
-    }
-    return [];
-  }
-
-  async getDeploymentLogs(
-    uuid: string,
-    deploymentUuid: string,
-  ): Promise<string> {
-    const result = await this.request<unknown>(
-      "GET",
-      `/applications/${uuid}/deployments/${deploymentUuid}`,
-    );
-    if (typeof result === "string") return result;
-    if (typeof result === "object" && result !== null) {
-      const obj = result as Record<string, unknown>;
-      if (typeof obj.logs === "string") return obj.logs;
-      if (Array.isArray(obj.logs)) return obj.logs.join("\n");
-      if (typeof obj.log === "string") return obj.log;
-      if (typeof obj.output === "string") return obj.output;
-      return JSON.stringify(result, null, 2);
-    }
-    return String(result);
   }
 
   // === Health Check ===
 
   async checkHealth(): Promise<boolean> {
     try {
-      // Health endpoint is at /api/health (no /v1 prefix)
       const healthUrl = this.baseUrl.replace("/api/v1", "/api/health");
       const res = await fetch(healthUrl, {
         headers: { Authorization: `Bearer ${this.token}` },
