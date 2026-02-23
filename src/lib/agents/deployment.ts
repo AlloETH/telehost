@@ -129,6 +129,12 @@ export async function createAgent(input: CreateAgentInput): Promise<string> {
     instant_deploy: false,
   });
 
+  // Save Coolify UUID immediately so cleanup works even if later steps fail
+  await db
+    .update(agents)
+    .set({ coolifyAppUuid: coolifyApp.uuid, updatedAt: new Date() })
+    .where(eq(agents.id, agent.id));
+
   // Wait for Coolify to fully index the new application before proceeding
   await waitForCoolifyApp(coolify, coolifyApp.uuid);
 
@@ -184,7 +190,6 @@ export async function createAgent(input: CreateAgentInput): Promise<string> {
     await db
       .update(agents)
       .set({
-        coolifyAppUuid: coolifyApp.uuid,
         telegramSessionEncrypted: encryptedSession.ciphertext,
         telegramSessionIv: encryptedSession.iv,
         telegramSessionTag: encryptedSession.tag + ":" + encryptedSession.salt,
@@ -200,7 +205,6 @@ export async function createAgent(input: CreateAgentInput): Promise<string> {
     await db
       .update(agents)
       .set({
-        coolifyAppUuid: coolifyApp.uuid,
         status: "awaiting_session",
         updatedAt: new Date(),
       })
@@ -277,8 +281,8 @@ export async function deleteAgent(agentId: string): Promise<void> {
     const coolify = getCoolifyClient();
     try {
       await coolify.deleteApp(agent.coolifyAppUuid);
-    } catch {
-      // App may already be deleted
+    } catch (err) {
+      console.error(`Failed to delete Coolify app ${agent.coolifyAppUuid}:`, err);
     }
   }
 
