@@ -1,3 +1,6 @@
 FROM ghcr.io/tonresistor/teleton-agent:latest
+USER root
+RUN mkdir -p /data && chmod 777 /data
+USER node
 ENTRYPOINT []
-CMD ["sh", "-c", "mkdir -p /data && if [ -n \"$TELETON_CONFIG_B64\" ]; then echo \"$TELETON_CONFIG_B64\" | base64 -d > /data/config.yaml; fi && if [ -n \"$TELETON_SESSION_B64\" ]; then echo \"$TELETON_SESSION_B64\" | base64 -d > /data/telegram_session.txt; fi && exec node dist/cli/index.js start"]
+CMD ["sh", "-c", "if [ -n \"$TELETON_CONFIG_B64\" ]; then echo \"$TELETON_CONFIG_B64\" | base64 -d > /data/config.yaml; fi && if [ -n \"$TELETON_SESSION_B64\" ]; then echo \"$TELETON_SESSION_B64\" | base64 -d > /data/telegram_session.txt; fi && exec node dist/cli/index.js start"]
