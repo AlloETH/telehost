@@ -10,13 +10,17 @@ export default function AgentLogsPage({
 }) {
   const { agentId } = use(params);
   const [logs, setLogs] = useState("");
+  const [logType, setLogType] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [tail, setTail] = useState(100);
 
   const fetchLogs = () => {
     fetch(`/api/agents/${agentId}/logs?tail=${tail}`)
       .then((r) => r.json())
-      .then((data) => setLogs(data.logs || "No logs available"))
+      .then((data) => {
+        setLogs(data.logs || data.error || "No logs available");
+        setLogType(data.type || "");
+      })
       .finally(() => setLoading(false));
   };
 
@@ -39,6 +43,19 @@ export default function AgentLogsPage({
           <h1 className="mt-2 text-2xl font-bold">Agent Logs</h1>
         </div>
         <div className="flex items-center gap-3">
+          {logType && (
+            <span
+              className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                logType === "deployment"
+                  ? "bg-yellow-500/20 text-yellow-400"
+                  : logType === "runtime"
+                    ? "bg-green-500/20 text-green-400"
+                    : "bg-gray-500/20 text-gray-400"
+              }`}
+            >
+              {logType === "deployment" ? "Deployment" : logType === "runtime" ? "Runtime" : logType}
+            </span>
+          )}
           <select
             value={tail}
             onChange={(e) => setTail(Number(e.target.value))}
@@ -57,7 +74,7 @@ export default function AgentLogsPage({
         </div>
       </div>
 
-      <div className="mt-6 overflow-auto rounded-xl border border-[var(--border)] bg-black p-4">
+      <div className="mt-6 overflow-auto rounded-xl border border-[var(--border)] bg-black p-4 max-h-[70vh]">
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <div className="h-6 w-6 animate-spin rounded-full border-2 border-[var(--primary)] border-t-transparent" />

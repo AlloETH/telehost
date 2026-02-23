@@ -152,6 +152,41 @@ class CoolifyClient {
     return String(result);
   }
 
+  // === Deployments ===
+
+  async getDeployments(
+    uuid: string,
+  ): Promise<Array<{ id: number; deployment_uuid: string; status: string; created_at: string }>> {
+    const result = await this.request<unknown>("GET", `/applications/${uuid}/deployments`);
+    if (Array.isArray(result)) return result;
+    if (typeof result === "object" && result !== null) {
+      const obj = result as Record<string, unknown>;
+      if (Array.isArray(obj.data)) return obj.data;
+      if (Array.isArray(obj.deployments)) return obj.deployments;
+    }
+    return [];
+  }
+
+  async getDeploymentLogs(
+    uuid: string,
+    deploymentUuid: string,
+  ): Promise<string> {
+    const result = await this.request<unknown>(
+      "GET",
+      `/applications/${uuid}/deployments/${deploymentUuid}`,
+    );
+    if (typeof result === "string") return result;
+    if (typeof result === "object" && result !== null) {
+      const obj = result as Record<string, unknown>;
+      if (typeof obj.logs === "string") return obj.logs;
+      if (Array.isArray(obj.logs)) return obj.logs.join("\n");
+      if (typeof obj.log === "string") return obj.log;
+      if (typeof obj.output === "string") return obj.output;
+      return JSON.stringify(result, null, 2);
+    }
+    return String(result);
+  }
+
   // === Health Check ===
 
   async checkHealth(): Promise<boolean> {

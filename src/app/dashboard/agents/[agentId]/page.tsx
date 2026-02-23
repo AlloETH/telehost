@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, use } from "react";
+import { useEffect, useState, use, useRef } from "react";
 import Link from "next/link";
 
 interface Agent {
@@ -16,6 +16,8 @@ interface Agent {
   updatedAt: string;
 }
 
+const TRANSITIONAL_STATES = ["provisioning", "starting", "deleting"];
+
 export default function AgentDetailPage({
   params,
 }: {
@@ -25,6 +27,7 @@ export default function AgentDetailPage({
   const [agent, setAgent] = useState<Agent | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState("");
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchAgent = () => {
     fetch(`/api/agents/${agentId}`)
@@ -35,9 +38,17 @@ export default function AgentDetailPage({
 
   useEffect(() => {
     fetchAgent();
-    const interval = setInterval(fetchAgent, 10000);
-    return () => clearInterval(interval);
   }, [agentId]);
+
+  // Adaptive polling: faster during transitional states
+  useEffect(() => {
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    const interval = agent && TRANSITIONAL_STATES.includes(agent.status) ? 5000 : 10000;
+    intervalRef.current = setInterval(fetchAgent, interval);
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, [agent?.status, agentId]);
 
   const doAction = async (action: string) => {
     setActionLoading(action);
@@ -68,6 +79,10 @@ export default function AgentDetailPage({
     );
   }
 
+  const needsSession =
+    agent.telegramSessionStatus !== "active" &&
+    !["running", "deleting"].includes(agent.status);
+
   return (
     <div>
       <div className="flex items-center justify-between">
@@ -83,8 +98,27 @@ export default function AgentDetailPage({
         <StatusBadge status={agent.status} />
       </div>
 
+      {/* Deploying indicator */}
+      {TRANSITIONAL_STATES.includes(agent.status) && (
+        <div className="mt-6 flex items-center gap-3 rounded-xl border border-blue-500/30 bg-blue-500/10 p-4">
+          <div className="h-5 w-5 animate-spin rounded-full border-2 border-blue-400 border-t-transparent" />
+          <div>
+            <p className="font-medium text-blue-400">
+              {agent.status === "provisioning"
+                ? "Provisioning..."
+                : agent.status === "starting"
+                  ? "Starting..."
+                  : "Processing..."}
+            </p>
+            <p className="mt-0.5 text-sm text-[var(--muted-foreground)]">
+              This may take a minute. Status updates automatically.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Telegram Session Alert */}
-      {agent.status === "awaiting_session" && (
+      {needsSession && (
         <div className="mt-6 rounded-xl border border-purple-500/30 bg-purple-500/10 p-4">
           <p className="font-medium text-purple-400">
             Telegram session required
@@ -113,7 +147,7 @@ export default function AgentDetailPage({
 
       {/* Controls */}
       <div className="mt-6 flex flex-wrap gap-3">
-        {!["running", "starting", "deleting"].includes(agent.status) && (
+        {!["running", "starting", "deleting", "provisioning"].includes(agent.status) && (
           <button
             onClick={() => doAction("start")}
             disabled={!!actionLoading}
@@ -159,7 +193,7 @@ export default function AgentDetailPage({
       <div className="mt-8 grid grid-cols-2 gap-4">
         <InfoCard
           label="Status"
-          value={agent.status.replace("_", " ")}
+          value={agent.status.replace(/_/g, " ")}
         />
         <InfoCard
           label="Telegram Session"
@@ -181,11 +215,35 @@ export default function AgentDetailPage({
           label="Created"
           value={new Date(agent.createdAt).toLocaleString()}
         />
-        <InfoCard
-          label="Domain"
-          value={agent.coolifyDomain || "Not assigned"}
-        />
+        <DomainCard domain={agent.coolifyDomain} />
       </div>
+    </div>
+  );
+}
+
+function DomainCard({ domain }: { domain: string | null }) {
+  if (!domain) {
+    return (
+      <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4">
+        <p className="text-xs text-[var(--muted-foreground)]">Domain</p>
+        <p className="mt-1 font-medium text-[var(--muted-foreground)]">Not assigned</p>
+      </div>
+    );
+  }
+
+  const url = domain.startsWith("http") ? domain : `https://${domain}`;
+
+  return (
+    <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4">
+      <p className="text-xs text-[var(--muted-foreground)]">Domain</p>
+      <a
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="mt-1 block font-medium text-[var(--primary)] hover:underline truncate"
+      >
+        {domain}
+      </a>
     </div>
   );
 }
@@ -208,6 +266,7 @@ function StatusBadge({ status }: { status: string }) {
     provisioning: "bg-yellow-500/20 text-yellow-400",
     awaiting_session: "bg-purple-500/20 text-purple-400",
     suspended: "bg-orange-500/20 text-orange-400",
+    deleting: "bg-red-500/20 text-red-400",
   };
 
   return (
@@ -216,7 +275,7 @@ function StatusBadge({ status }: { status: string }) {
         colors[status] || "bg-gray-500/20 text-gray-400"
       }`}
     >
-      {status.replace("_", " ")}
+      {status.replace(/_/g, " ")}
     </span>
   );
 }
