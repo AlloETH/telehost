@@ -25,9 +25,9 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Determine the app domain from the request
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-  const appDomain = new URL(appUrl).hostname;
+  // Determine the app domain from the request host
+  const host = req.headers.get("host") || req.headers.get("x-forwarded-host") || "localhost";
+  const appDomain = host.split(":")[0];
 
   // Verify the proof
   const valid = await verifyTonProof(body, body.proof.payload, appDomain);
