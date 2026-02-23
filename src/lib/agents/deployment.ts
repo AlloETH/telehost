@@ -114,6 +114,11 @@ export async function createAgent(input: CreateAgentInput): Promise<string> {
 
   const coolifyApp = await coolify.createDockerImageApp(appParams);
 
+  // 6b. Set the FQDN explicitly (Coolify auto-generates one otherwise)
+  if (agentDomain) {
+    await coolify.updateApp(coolifyApp.uuid, { fqdn: agentDomain });
+  }
+
   // 7. Set environment variables
   await coolify.bulkSetEnvVars(coolifyApp.uuid, [
     {
