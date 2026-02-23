@@ -25,10 +25,16 @@ interface PendingSession {
 }
 
 // In-memory map — GramJS clients hold live TCP connections and can't be serialized
-const pendingSessions = new Map<string, PendingSession>();
+// Stored on globalThis to survive Next.js hot-reloads in dev mode
+const globalForTg = globalThis as unknown as {
+  __telegramSessions?: Map<string, PendingSession>;
+  __telegramCleanupInterval?: ReturnType<typeof setInterval> | null;
+};
+
+const pendingSessions = globalForTg.__telegramSessions ??= new Map<string, PendingSession>();
 
 // Cleanup interval
-let cleanupInterval: ReturnType<typeof setInterval> | null = null;
+let cleanupInterval = globalForTg.__telegramCleanupInterval ?? null;
 
 function ensureCleanupRunning() {
   if (cleanupInterval) return;
@@ -42,8 +48,10 @@ function ensureCleanupRunning() {
     if (pendingSessions.size === 0 && cleanupInterval) {
       clearInterval(cleanupInterval);
       cleanupInterval = null;
+      globalForTg.__telegramCleanupInterval = null;
     }
   }, 60_000);
+  globalForTg.__telegramCleanupInterval = cleanupInterval;
 }
 
 /**
