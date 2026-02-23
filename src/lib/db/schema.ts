@@ -26,7 +26,6 @@ export const agentStatusEnum = pgEnum("agent_status", [
 ]);
 
 export const subscriptionTierEnum = pgEnum("subscription_tier", [
-  "free",
   "basic",
   "pro",
   "enterprise",
@@ -142,7 +141,7 @@ export const subscriptions = pgTable(
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    tier: subscriptionTierEnum("tier").notNull().default("free"),
+    tier: subscriptionTierEnum("tier").notNull().default("basic"),
     status: subscriptionStatusEnum("status").notNull().default("active"),
     currentPeriodStart: timestamp("current_period_start").notNull(),
     currentPeriodEnd: timestamp("current_period_end").notNull(),

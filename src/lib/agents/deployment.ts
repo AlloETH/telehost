@@ -69,7 +69,7 @@ export async function createAgent(input: CreateAgentInput): Promise<string> {
 
   // 4. Determine resource limits from subscription tier
   const tier: SubscriptionTier =
-    sub.length > 0 ? (sub[0].tier as SubscriptionTier) : "free";
+    sub.length > 0 ? (sub[0].tier as SubscriptionTier) : "basic";
   const tierConfig = SUBSCRIPTION_TIERS[tier];
 
   // 5. Create Coolify application

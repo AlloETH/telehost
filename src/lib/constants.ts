@@ -1,13 +1,4 @@
 export const SUBSCRIPTION_TIERS = {
-  free: {
-    name: "Free",
-    maxAgents: 1,
-    memoryLimitMb: 256,
-    cpuLimit: "0.25",
-    priceNanoton: "0",
-    priceTon: 0,
-    trialDays: 7,
-  },
   basic: {
     name: "Basic",
     maxAgents: 1,
@@ -15,7 +6,6 @@ export const SUBSCRIPTION_TIERS = {
     cpuLimit: "0.5",
     priceNanoton: "5000000000",
     priceTon: 5,
-    trialDays: 0,
   },
   pro: {
     name: "Pro",
@@ -24,7 +14,6 @@ export const SUBSCRIPTION_TIERS = {
     cpuLimit: "1.0",
     priceNanoton: "12000000000",
     priceTon: 12,
-    trialDays: 0,
   },
   enterprise: {
     name: "Enterprise",
@@ -33,7 +22,6 @@ export const SUBSCRIPTION_TIERS = {
     cpuLimit: "2.0",
     priceNanoton: "30000000000",
     priceTon: 30,
-    trialDays: 0,
   },
 } as const;
 

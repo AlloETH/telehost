@@ -77,7 +77,7 @@ export default function Home() {
         <h3 className="mb-12 text-center text-3xl font-bold">
           Simple pricing
         </h3>
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-4">
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
           {(
             Object.entries(SUBSCRIPTION_TIERS) as [
               string,
@@ -94,12 +94,10 @@ export default function Home() {
             >
               <h4 className="text-lg font-semibold">{tier.name}</h4>
               <p className="mt-2 text-3xl font-bold">
-                {tier.priceTon === 0 ? "Free" : `${tier.priceTon} TON`}
-                {tier.priceTon > 0 && (
-                  <span className="text-sm font-normal text-[var(--muted-foreground)]">
-                    /mo
-                  </span>
-                )}
+                {tier.priceTon} TON
+                <span className="text-sm font-normal text-[var(--muted-foreground)]">
+                  /mo
+                </span>
               </p>
               <ul className="mt-4 space-y-2 text-sm text-[var(--muted-foreground)]">
                 <li>
@@ -107,7 +105,6 @@ export default function Home() {
                 </li>
                 <li>{tier.memoryLimitMb} MB RAM / agent</li>
                 <li>{tier.cpuLimit} CPU / agent</li>
-                {key === "free" && <li>{tier.trialDays}-day trial</li>}
               </ul>
             </div>
           ))}

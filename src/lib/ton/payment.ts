@@ -25,8 +25,8 @@ export async function createSubscriptionPayment(
   req: PaymentRequest,
 ): Promise<CreatePaymentResult> {
   const tierConfig = SUBSCRIPTION_TIERS[req.tier];
-  if (!tierConfig || tierConfig.priceTon === 0) {
-    throw new Error("Invalid tier or free tier selected");
+  if (!tierConfig) {
+    throw new Error("Invalid tier selected");
   }
 
   const recipientAddress = process.env.TON_SERVICE_WALLET_ADDRESS;

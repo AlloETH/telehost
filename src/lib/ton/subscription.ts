@@ -74,34 +74,6 @@ export async function activateSubscription(
   }
 }
 
-export async function createFreeTrial(userId: string): Promise<void> {
-  const tierConfig = SUBSCRIPTION_TIERS.free;
-  const now = new Date();
-  const trialEnd = new Date(
-    now.getTime() + tierConfig.trialDays * 24 * 60 * 60 * 1000,
-  );
-
-  const existing = await db
-    .select()
-    .from(subscriptions)
-    .where(eq(subscriptions.userId, userId))
-    .limit(1);
-
-  if (existing.length > 0) {
-    throw new Error("User already has a subscription");
-  }
-
-  await db.insert(subscriptions).values({
-    userId,
-    tier: "free",
-    status: "active",
-    currentPeriodStart: now,
-    currentPeriodEnd: trialEnd,
-    maxAgents: tierConfig.maxAgents,
-    memoryLimitMb: tierConfig.memoryLimitMb,
-    cpuLimit: tierConfig.cpuLimit,
-  });
-}
 
 export async function checkExpirations(): Promise<void> {
   const now = new Date();
