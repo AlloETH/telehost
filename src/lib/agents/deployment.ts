@@ -255,7 +255,7 @@ export async function redeployAgent(agentId: string): Promise<void> {
     throw new Error("Agent has no Coolify application");
   }
   const coolify = getCoolifyClient();
-  await coolify.deployApp(agent.coolifyAppUuid);
+  await coolify.deployApp(agent.coolifyAppUuid, true);
   await db
     .update(agents)
     .set({ status: "starting", updatedAt: new Date() })
