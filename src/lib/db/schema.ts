@@ -119,6 +119,9 @@ export const agents = pgTable(
       .notNull()
       .default("none"),
 
+    // WebUI auth token (stored plain — not sensitive like API keys)
+    webuiAuthToken: varchar("webui_auth_token", { length: 100 }),
+
     // Metadata
     lastHealthCheck: timestamp("last_health_check"),
     lastError: text("last_error"),

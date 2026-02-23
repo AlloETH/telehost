@@ -7,7 +7,7 @@ import {
   type CreateDockerImageAppParams,
 } from "@/lib/coolify/client";
 import {
-  generateConfigYaml,
+  generateConfigWithToken,
   type AgentConfig,
 } from "@/lib/agents/config-generator";
 import {
@@ -70,7 +70,7 @@ export async function createAgent(input: CreateAgentInput): Promise<string> {
   const agentDomain = baseDomain ? `https://${slug}.${baseDomain}` : undefined;
 
   // 3. Generate config.yaml and encrypt it
-  const configYaml = generateConfigYaml(config);
+  const { yaml: configYaml, authToken } = generateConfigWithToken(config);
   const encryptedConfig = encrypt(configYaml);
 
   // 4. Create agent record in DB
@@ -82,6 +82,7 @@ export async function createAgent(input: CreateAgentInput): Promise<string> {
       slug,
       status: "provisioning",
       coolifyDomain: agentDomain || null,
+      webuiAuthToken: authToken,
       configEncrypted: encryptedConfig.ciphertext,
       configIv: encryptedConfig.iv,
       configTag: encryptedConfig.tag + ":" + encryptedConfig.salt,

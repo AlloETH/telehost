@@ -9,6 +9,7 @@ interface Agent {
   status: string;
   telegramSessionStatus: string;
   coolifyDomain: string | null;
+  webuiAuthToken: string | null;
   lastHealthCheck: string | null;
   lastError: string | null;
   restartCount: number;
@@ -216,6 +217,9 @@ export default function AgentDetailPage({
           value={new Date(agent.createdAt).toLocaleString()}
         />
         <DomainCard domain={agent.coolifyDomain} />
+        {agent.webuiAuthToken && (
+          <AuthTokenCard token={agent.webuiAuthToken} />
+        )}
       </div>
     </div>
   );
@@ -244,6 +248,40 @@ function DomainCard({ domain }: { domain: string | null }) {
       >
         {domain}
       </a>
+    </div>
+  );
+}
+
+function AuthTokenCard({ token }: { token: string }) {
+  const [visible, setVisible] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const copy = () => {
+    navigator.clipboard.writeText(token);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4">
+      <p className="text-xs text-[var(--muted-foreground)]">WebUI Auth Token</p>
+      <div className="mt-1 flex items-center gap-2">
+        <code className="flex-1 truncate font-mono text-sm">
+          {visible ? token : "••••••••••••••••"}
+        </code>
+        <button
+          onClick={() => setVisible(!visible)}
+          className="text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+        >
+          {visible ? "Hide" : "Show"}
+        </button>
+        <button
+          onClick={copy}
+          className="text-xs text-[var(--primary)] hover:underline"
+        >
+          {copied ? "Copied!" : "Copy"}
+        </button>
+      </div>
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import { stringify } from "yaml";
+import { randomBytes } from "crypto";
 
 export interface AgentConfig {
   // Agent / LLM
@@ -27,6 +28,16 @@ export interface AgentConfig {
   tonapiKey?: string;
   webuiEnabled?: boolean;
   webuiPort?: number;
+  webuiAuthToken?: string;
+}
+
+/**
+ * Generate config and return both the YAML string and the generated auth token.
+ */
+export function generateConfigWithToken(config: AgentConfig): { yaml: string; authToken: string } {
+  const authToken = config.webuiAuthToken || randomBytes(24).toString("hex");
+  const yaml = generateConfigYaml({ ...config, webuiAuthToken: authToken });
+  return { yaml, authToken };
 }
 
 export function generateConfigYaml(config: AgentConfig): string {
@@ -61,6 +72,7 @@ export function generateConfigYaml(config: AgentConfig): string {
       enabled: config.webuiEnabled ?? true,
       port: config.webuiPort ?? 7777,
       host: "0.0.0.0",
+      auth_token: config.webuiAuthToken || randomBytes(24).toString("hex"),
     },
   };
 

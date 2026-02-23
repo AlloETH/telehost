@@ -24,6 +24,7 @@ export async function GET(
       telegramSessionStatus: agents.telegramSessionStatus,
       coolifyAppUuid: agents.coolifyAppUuid,
       coolifyDomain: agents.coolifyDomain,
+      webuiAuthToken: agents.webuiAuthToken,
       lastHealthCheck: agents.lastHealthCheck,
       lastError: agents.lastError,
       restartCount: agents.restartCount,
