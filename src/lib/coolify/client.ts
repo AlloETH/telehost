@@ -27,11 +27,20 @@ export interface EnvVar {
   is_shown_once?: boolean;
 }
 
+export interface CoolifyServiceApplication {
+  uuid: string;
+  name: string;
+  status: string;
+  fqdn?: string;
+  [key: string]: unknown;
+}
+
 export interface CoolifyService {
   uuid: string;
   name: string;
   status: string;
   fqdn?: string;
+  applications?: CoolifyServiceApplication[];
   [key: string]: unknown;
 }
 
@@ -124,6 +133,28 @@ class CoolifyClient {
     await this.request("PATCH", `/services/${uuid}/envs/bulk`, {
       data: envVars,
     });
+  }
+
+  // === Logs ===
+
+  async getApplicationLogs(
+    appUuid: string,
+    lines: number = 100,
+  ): Promise<string> {
+    try {
+      const data = await this.request<unknown>(
+        "GET",
+        `/applications/${appUuid}/logs?lines=${lines}`,
+      );
+      if (Array.isArray(data)) return data.join("\n");
+      if (typeof data === "string") return data;
+      return JSON.stringify(data);
+    } catch (err) {
+      if (err instanceof CoolifyApiError && err.statusCode === 404) {
+        throw new Error("Logs endpoint not available for this resource");
+      }
+      throw err;
+    }
   }
 
   // === Health Check ===

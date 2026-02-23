@@ -11,6 +11,7 @@ export default function AgentLogsPage({
   const { agentId } = use(params);
   const [logs, setLogs] = useState("");
   const [logType, setLogType] = useState<string>("");
+  const [containerStatus, setContainerStatus] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [tail, setTail] = useState(100);
 
@@ -20,6 +21,7 @@ export default function AgentLogsPage({
       .then((data) => {
         setLogs(data.logs || data.error || "No logs available");
         setLogType(data.type || "");
+        setContainerStatus(data.status || "");
       })
       .finally(() => setLoading(false));
   };
@@ -43,17 +45,22 @@ export default function AgentLogsPage({
           <h1 className="mt-2 text-2xl font-bold">Agent Logs</h1>
         </div>
         <div className="flex items-center gap-3">
+          {containerStatus && (
+            <span className="rounded-full px-2.5 py-0.5 text-xs font-medium bg-blue-500/20 text-blue-400">
+              {containerStatus}
+            </span>
+          )}
           {logType && (
             <span
               className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                logType === "deployment"
-                  ? "bg-yellow-500/20 text-yellow-400"
+                logType === "error"
+                  ? "bg-red-500/20 text-red-400"
                   : logType === "runtime"
                     ? "bg-green-500/20 text-green-400"
                     : "bg-gray-500/20 text-gray-400"
               }`}
             >
-              {logType === "deployment" ? "Deployment" : logType === "runtime" ? "Runtime" : logType}
+              {logType === "error" ? "Error" : logType === "runtime" ? "Runtime" : logType === "info" ? "Info" : logType}
             </span>
           )}
           <select

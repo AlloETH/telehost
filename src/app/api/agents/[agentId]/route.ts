@@ -57,6 +57,8 @@ export async function GET(
   if (synced) {
     agent.status = synced.status;
     if (synced.coolifyDomain) agent.coolifyDomain = synced.coolifyDomain;
+    if (synced.coolifyStatus) agent.coolifyStatus = synced.coolifyStatus;
+    if (synced.health !== undefined) agent.healthStatus = synced.health;
   }
 
   // Decrypt config to expose editable settings

@@ -57,6 +57,12 @@ function buildComposeYaml(opts: {
     `      - TELETON_CONFIG_B64=${opts.configB64 || ""}`,
     `      - TELETON_SESSION_B64=${opts.sessionB64 || ""}`,
     `      - TELETON_WALLET_B64=${opts.walletB64 || ""}`,
+    "    healthcheck:",
+    `      test: ["CMD", "node", "-e", "fetch('http://localhost:${TELETON_WEBUI_PORT}/').then(r=>{process.exit(r.status<500?0:1)}).catch(()=>process.exit(1))"]`,
+    "      interval: 30s",
+    "      timeout: 10s",
+    "      start_period: 40s",
+    "      retries: 3",
     "    deploy:",
     "      resources:",
     "        limits:",
@@ -383,14 +389,25 @@ export async function deleteAgent(agentId: string): Promise<void> {
 
 export async function getAgentLogs(
   agentId: string,
-  tail?: number,
+  tail: number = 100,
 ): Promise<string> {
   const agent = await getAgentOrThrow(agentId);
   if (!agent.coolifyAppUuid) {
     throw new Error("Agent has no Coolify service");
   }
-  // Logs are not available via the services API — return a placeholder
-  return `Service ${agent.coolifyAppUuid} — check Coolify UI for container logs.`;
+
+  const coolify = getCoolifyClient();
+  const service = await coolify.getService(agent.coolifyAppUuid);
+
+  // Try getting logs from the first service application
+  if (
+    Array.isArray(service.applications) &&
+    service.applications.length > 0
+  ) {
+    return coolify.getApplicationLogs(service.applications[0].uuid, tail);
+  }
+
+  return `Service ${agent.coolifyAppUuid} (status: ${service.status || "unknown"}) — no application containers found.`;
 }
 
 export async function injectTelegramSession(

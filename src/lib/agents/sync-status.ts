@@ -7,30 +7,78 @@ import { getCoolifyClient, CoolifyApiError } from "@/lib/coolify/client";
 // unless Coolify explicitly says the container is running
 const PROTECTED_STATES = ["awaiting_session", "provisioning", "deleting"];
 
+/**
+ * Parse Coolify's combined "status:health" string.
+ * Examples: "running:healthy", "exited:unhealthy", "degraded", "running", "stopped"
+ */
+function parseCoolifyStatus(raw: string): {
+  containerStatus: string;
+  health: string | null;
+} {
+  const parts = raw.toLowerCase().trim().split(":");
+  return {
+    containerStatus: parts[0] || "",
+    health: parts.length > 1 ? parts[1] : null,
+  };
+}
+
 function mapCoolifyStatus(
   coolifyStatus: string | undefined | null,
   currentDbStatus: string,
-): string {
-  if (!coolifyStatus) return currentDbStatus;
+): { status: string; health: string | null; errorDetail: string | null } {
+  if (!coolifyStatus) {
+    return { status: currentDbStatus, health: null, errorDetail: null };
+  }
 
-  const s = String(coolifyStatus).toLowerCase().trim();
+  const { containerStatus, health } = parseCoolifyStatus(coolifyStatus);
 
   // Running is always authoritative from Coolify
-  if (s.includes("running")) return "running";
+  if (containerStatus === "running") {
+    const errorDetail =
+      health === "unhealthy" ? "Container running but health check failing" : null;
+    return { status: "running", health, errorDetail };
+  }
 
   // Don't let Coolify override our own managed states
   if (PROTECTED_STATES.includes(currentDbStatus)) {
-    return currentDbStatus;
+    return { status: currentDbStatus, health, errorDetail: null };
   }
 
-  // Map Coolify states to our states
-  if (s.includes("exited") || s.includes("stopped")) return "stopped";
-  if (s.includes("restarting") || s.includes("starting")) return "starting";
-  if (s.includes("removing") || s.includes("degraded") || s.includes("error")) return "error";
+  // Map Coolify container states to our states
+  if (containerStatus === "exited" || containerStatus === "stopped") {
+    return {
+      status: "stopped",
+      health,
+      errorDetail:
+        health === "unhealthy" ? "Container exited with unhealthy status" : null,
+    };
+  }
 
-  // If we don't recognize the status, keep current
-  console.log(`[sync] Unknown Coolify status: "${coolifyStatus}" for agent in state "${currentDbStatus}"`);
-  return currentDbStatus;
+  if (containerStatus === "restarting" || containerStatus === "starting") {
+    return { status: "starting", health, errorDetail: null };
+  }
+
+  if (containerStatus === "degraded") {
+    return {
+      status: "error",
+      health: health || "degraded",
+      errorDetail: "Service is degraded — one or more containers failed",
+    };
+  }
+
+  if (containerStatus === "error" || containerStatus === "removing") {
+    return {
+      status: "error",
+      health,
+      errorDetail: `Container status: ${coolifyStatus}`,
+    };
+  }
+
+  // Unrecognized status — keep current
+  console.log(
+    `[sync] Unknown Coolify status: "${coolifyStatus}" for agent in state "${currentDbStatus}"`,
+  );
+  return { status: currentDbStatus, health, errorDetail: null };
 }
 
 interface AgentForSync {
@@ -40,17 +88,21 @@ interface AgentForSync {
   coolifyDomain: string | null;
 }
 
-interface SyncResult {
+export interface SyncResult {
   status: string;
   coolifyDomain: string | null;
-  coolifyStatus?: string; // raw status from Coolify for debugging
+  coolifyStatus?: string; // raw status from Coolify
+  health?: string | null; // parsed health component (healthy/unhealthy)
+  serviceAppUuid?: string; // UUID of the first service application (for logs)
 }
 
 /**
  * Sync a single agent's status from Coolify.
- * Returns the updated fields (status, domain) without modifying the input object.
+ * Returns the updated fields without modifying the input object.
  */
-export async function syncAgentFromCoolify(agent: AgentForSync): Promise<SyncResult | null> {
+export async function syncAgentFromCoolify(
+  agent: AgentForSync,
+): Promise<SyncResult | null> {
   if (!agent.coolifyAppUuid) return null;
   if (PROTECTED_STATES.includes(agent.status)) return null;
 
@@ -58,15 +110,29 @@ export async function syncAgentFromCoolify(agent: AgentForSync): Promise<SyncRes
     const coolify = getCoolifyClient();
     const coolifyService = await coolify.getService(agent.coolifyAppUuid);
 
-    console.log(`[sync] Agent ${agent.id} (db=${agent.status}): Coolify response status="${coolifyService.status}", fqdn="${coolifyService.fqdn}"`, JSON.stringify(Object.keys(coolifyService)));
+    const rawStatus = coolifyService.status
+      ? String(coolifyService.status)
+      : null;
+    const { status: mappedStatus, health, errorDetail } = mapCoolifyStatus(
+      rawStatus,
+      agent.status,
+    );
 
-    const rawStatus = coolifyService.status ? String(coolifyService.status) : null;
-    const mappedStatus = mapCoolifyStatus(rawStatus, agent.status);
-    const fqdn = coolifyService.fqdn ? String(coolifyService.fqdn) : null;
+    const fqdn = coolifyService.fqdn
+      ? String(coolifyService.fqdn)
+      : null;
 
-    console.log(`[sync] Agent ${agent.id}: raw="${rawStatus}" → mapped="${mappedStatus}" (was "${agent.status}")`);
+    // Extract the first service application UUID (for container logs)
+    const serviceAppUuid =
+      Array.isArray(coolifyService.applications) &&
+      coolifyService.applications.length > 0
+        ? coolifyService.applications[0].uuid
+        : undefined;
 
-    const updates: Record<string, unknown> = {};
+    const updates: Record<string, unknown> = {
+      lastHealthCheck: new Date(),
+      updatedAt: new Date(),
+    };
     let changed = false;
 
     if (mappedStatus !== agent.status) {
@@ -79,21 +145,42 @@ export async function syncAgentFromCoolify(agent: AgentForSync): Promise<SyncRes
       changed = true;
     }
 
+    // Update lastError based on health
+    if (errorDetail) {
+      updates.lastError = errorDetail;
+      changed = true;
+    } else if (
+      mappedStatus === "running" &&
+      health === "healthy" &&
+      agent.status !== "running"
+    ) {
+      // Clear error when transitioning to healthy running state
+      updates.lastError = null;
+      changed = true;
+    }
+
     if (changed) {
-      updates.lastHealthCheck = new Date();
-      updates.updatedAt = new Date();
       await db.update(agents).set(updates).where(eq(agents.id, agent.id));
+    } else {
+      // Always update lastHealthCheck even if nothing else changed
+      await db
+        .update(agents)
+        .set({ lastHealthCheck: new Date() })
+        .where(eq(agents.id, agent.id));
     }
 
     return {
       status: mappedStatus,
       coolifyDomain: fqdn || agent.coolifyDomain,
       coolifyStatus: rawStatus || undefined,
+      health,
+      serviceAppUuid,
     };
   } catch (err) {
-    // Don't fail if Coolify is unreachable
     if (err instanceof CoolifyApiError) {
-      console.log(`[sync] Coolify API error for agent ${agent.id}: ${err.message}`);
+      console.log(
+        `[sync] Coolify API error for agent ${agent.id}: ${err.message}`,
+      );
     }
     return null;
   }

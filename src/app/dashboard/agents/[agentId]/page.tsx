@@ -52,6 +52,8 @@ interface Agent {
   status: string;
   telegramSessionStatus: string;
   coolifyDomain: string | null;
+  coolifyStatus: string | null;
+  healthStatus: string | null;
   webuiAuthToken: string | null;
   walletAddress: string | null;
   lastHealthCheck: string | null;
@@ -298,6 +300,10 @@ export default function AgentDetailPage({
           label="Status"
           value={agent.status.replace(/_/g, " ")}
         />
+        <HealthCard
+          health={agent.healthStatus}
+          coolifyStatus={agent.coolifyStatus}
+        />
         <InfoCard
           icon={<Bot className="h-4 w-4" />}
           label="Telegram Session"
@@ -333,6 +339,40 @@ export default function AgentDetailPage({
       {agent.config && (
         <SettingsSection agentId={agentId} agent={agent} onUpdate={fetchAgent} />
       )}
+    </div>
+  );
+}
+
+function HealthCard({
+  health,
+  coolifyStatus,
+}: {
+  health: string | null;
+  coolifyStatus: string | null;
+}) {
+  const healthConfig: Record<string, { color: string; label: string }> = {
+    healthy: { color: "text-green-400", label: "Healthy" },
+    unhealthy: { color: "text-red-400", label: "Unhealthy" },
+    degraded: { color: "text-orange-400", label: "Degraded" },
+  };
+
+  const h = health ? healthConfig[health] : null;
+
+  return (
+    <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4">
+      <div className="flex items-center gap-2 text-[var(--muted-foreground)]">
+        <Activity className="h-3.5 w-3.5" />
+        <p className="text-xs">Container Health</p>
+      </div>
+      <div className="mt-1.5">
+        {h ? (
+          <p className={`text-sm font-medium ${h.color}`}>{h.label}</p>
+        ) : (
+          <p className="text-sm font-medium text-[var(--muted-foreground)]">
+            {coolifyStatus || "Unknown"}
+          </p>
+        )}
+      </div>
     </div>
   );
 }
