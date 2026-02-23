@@ -123,9 +123,8 @@ class CoolifyClient {
   // === Lifecycle ===
 
   async deployApp(uuid: string, force?: boolean): Promise<void> {
-    const params = new URLSearchParams({ uuid });
-    if (force) params.set("force", "true");
-    await this.request("GET", `/deploy?${params.toString()}`);
+    const query = force ? "?force=true" : "";
+    await this.request("POST", `/applications/${uuid}/start${query}`);
   }
 
   async startApp(uuid: string): Promise<void> {
