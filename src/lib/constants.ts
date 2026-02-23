@@ -35,5 +35,5 @@ export const AGENT_MAX_RESTART_ATTEMPTS = 3;
 export const HEALTH_CHECK_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 export const SUBSCRIPTION_GRACE_PERIOD_DAYS = 3;
 
-export const TELEGRAM_SESSION_TTL_MS = 5 * 60 * 1000; // 5 minutes
+export const TELEGRAM_SESSION_TTL_MS = 15 * 60 * 1000; // 15 minutes
 export const MAX_CONCURRENT_TELEGRAM_SESSIONS = 10;

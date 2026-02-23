@@ -202,6 +202,9 @@ export function getSessionStatus(
   const session = pendingSessions.get(sessionKey);
   if (!session) return null;
 
+  // Keep-alive: reset TTL on each poll so active sessions don't expire
+  session.createdAt = Date.now();
+
   return {
     status: session.status,
     sessionString:
