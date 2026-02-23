@@ -31,51 +31,68 @@ export default function AgentsPage() {
   }
 
   return (
-    <div>
+    <div className="mx-auto max-w-4xl">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Agents</h1>
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Agents</h1>
+          <p className="mt-1 text-sm text-[var(--muted-foreground)]">
+            {agents.length} agent{agents.length !== 1 ? "s" : ""} deployed
+          </p>
+        </div>
         <Link
           href="/dashboard/agents/new"
-          className="rounded-lg bg-[var(--primary)] px-5 py-2.5 text-sm font-medium text-white hover:opacity-90 transition-opacity"
+          className="rounded-lg bg-[var(--primary)] px-5 py-2.5 text-sm font-medium text-white hover:brightness-110 transition-all"
         >
-          Deploy New Agent
+          + Deploy Agent
         </Link>
       </div>
 
       {agents.length === 0 ? (
-        <div className="mt-12 text-center">
-          <p className="text-[var(--muted-foreground)]">
-            No agents deployed yet.
+        <div className="mt-16 rounded-xl border border-dashed border-[var(--border)] p-16 text-center">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--primary)]/10 text-xl text-[var(--primary)]">
+            +
+          </div>
+          <p className="mt-4 text-lg font-medium">No agents deployed yet</p>
+          <p className="mt-2 text-sm text-[var(--muted-foreground)]">
+            Deploy your first AI agent to get started with Telegram + TON automation.
           </p>
           <Link
             href="/dashboard/agents/new"
-            className="mt-4 inline-block rounded-lg bg-[var(--primary)] px-5 py-2.5 text-sm font-medium text-white hover:opacity-90 transition-opacity"
+            className="mt-6 inline-block rounded-lg bg-[var(--primary)] px-6 py-2.5 text-sm font-medium text-white hover:brightness-110 transition-all"
           >
             Deploy Your First Agent
           </Link>
         </div>
       ) : (
-        <div className="mt-6 space-y-3">
+        <div className="mt-6 space-y-2">
           {agents.map((agent) => (
             <Link
               key={agent.id}
               href={`/dashboard/agents/${agent.id}`}
-              className="flex items-center justify-between rounded-xl border border-[var(--border)] bg-[var(--card)] p-5 hover:bg-[var(--accent)] transition-colors"
+              className="group flex items-center justify-between rounded-xl border border-[var(--border)] bg-[var(--card)] p-4 hover:border-[var(--muted-foreground)]/30 transition-colors"
             >
-              <div>
-                <h3 className="font-semibold">{agent.name}</h3>
-                <p className="mt-1 text-sm text-[var(--muted-foreground)]">
-                  Created{" "}
-                  {new Date(agent.createdAt).toLocaleDateString()}
-                </p>
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[var(--accent)] text-sm font-semibold group-hover:bg-[var(--primary)]/10 group-hover:text-[var(--primary)] transition-colors">
+                  {agent.name.charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <h3 className="font-medium">{agent.name}</h3>
+                  <p className="text-xs text-[var(--muted-foreground)]">
+                    Created{" "}
+                    {new Date(agent.createdAt).toLocaleDateString()}
+                  </p>
+                </div>
               </div>
               <div className="flex items-center gap-3">
                 {agent.telegramSessionStatus !== "active" && (
-                  <span className="text-xs text-[var(--warning)]">
+                  <span className="rounded-full bg-yellow-500/10 px-2.5 py-0.5 text-xs font-medium text-[var(--warning)]">
                     Session needed
                   </span>
                 )}
                 <StatusBadge status={agent.status} />
+                <span className="text-[var(--muted-foreground)] opacity-0 group-hover:opacity-100 transition-opacity">
+                  &rarr;
+                </span>
               </div>
             </Link>
           ))}
@@ -86,23 +103,22 @@ export default function AgentsPage() {
 }
 
 function StatusBadge({ status }: { status: string }) {
-  const colors: Record<string, string> = {
-    running: "bg-green-500/20 text-green-400",
-    stopped: "bg-gray-500/20 text-gray-400",
-    starting: "bg-blue-500/20 text-blue-400",
-    error: "bg-red-500/20 text-red-400",
-    provisioning: "bg-yellow-500/20 text-yellow-400",
-    awaiting_session: "bg-purple-500/20 text-purple-400",
-    suspended: "bg-orange-500/20 text-orange-400",
+  const config: Record<string, { bg: string; dot: string }> = {
+    running: { bg: "bg-green-500/20 text-green-400", dot: "bg-green-400" },
+    stopped: { bg: "bg-gray-500/20 text-gray-400", dot: "bg-gray-400" },
+    starting: { bg: "bg-blue-500/20 text-blue-400", dot: "bg-blue-400" },
+    error: { bg: "bg-red-500/20 text-red-400", dot: "bg-red-400" },
+    provisioning: { bg: "bg-yellow-500/20 text-yellow-400", dot: "bg-yellow-400" },
+    awaiting_session: { bg: "bg-purple-500/20 text-purple-400", dot: "bg-purple-400" },
+    suspended: { bg: "bg-orange-500/20 text-orange-400", dot: "bg-orange-400" },
   };
 
+  const c = config[status] || { bg: "bg-gray-500/20 text-gray-400", dot: "bg-gray-400" };
+
   return (
-    <span
-      className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
-        colors[status] || "bg-gray-500/20 text-gray-400"
-      }`}
-    >
-      {status.replace("_", " ")}
+    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${c.bg}`}>
+      <span className={`inline-block h-1.5 w-1.5 rounded-full ${c.dot} ${status === "running" ? "animate-pulse" : ""}`} />
+      {status.replace(/_/g, " ")}
     </span>
   );
 }
