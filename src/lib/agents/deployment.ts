@@ -129,7 +129,7 @@ export async function createAgent(input: CreateAgentInput): Promise<string> {
     project_uuid: process.env.COOLIFY_PROJECT_UUID!,
     server_uuid: process.env.COOLIFY_SERVER_UUID!,
     environment_name: process.env.COOLIFY_ENVIRONMENT_NAME || "production",
-    docker_compose_raw: composeYaml,
+    docker_compose_raw: Buffer.from(composeYaml).toString("base64"),
     name: slug,
     instant_deploy: false,
   });
