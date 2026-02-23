@@ -2,6 +2,37 @@
 
 import { useEffect, useState, use, useRef, useCallback } from "react";
 import Link from "next/link";
+import {
+  ArrowLeft,
+  Play,
+  Square,
+  RotateCcw,
+  RefreshCw,
+  Trash2,
+  ScrollText,
+  Loader2,
+  AlertTriangle,
+  MessageSquareWarning,
+  Globe,
+  Wallet,
+  KeyRound,
+  Clock,
+  CalendarDays,
+  Activity,
+  Copy,
+  Check,
+  ChevronDown,
+  ChevronUp,
+  Settings,
+  Brain,
+  Shield,
+  Key,
+  Save,
+  ExternalLink,
+  Eye,
+  EyeOff,
+  Bot,
+} from "lucide-react";
 
 interface AgentConfig {
   provider?: string;
@@ -89,7 +120,7 @@ export default function AgentDetailPage({
   if (loading || !agent) {
     return (
       <div className="flex items-center justify-center py-24">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-[var(--primary)] border-t-transparent" />
+        <Loader2 className="h-8 w-8 animate-spin text-[var(--primary)]" />
       </div>
     );
   }
@@ -99,75 +130,101 @@ export default function AgentDetailPage({
     !["running", "deleting"].includes(agent.status);
 
   return (
-    <div>
-      <div className="flex items-center justify-between">
+    <div className="mx-auto max-w-4xl">
+      {/* Header */}
+      <div className="flex items-start justify-between">
         <div>
           <Link
             href="/dashboard/agents"
-            className="text-sm text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+            className="inline-flex items-center gap-1.5 text-sm text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
           >
-            &larr; Back to Agents
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Back to Agents
           </Link>
-          <h1 className="mt-2 text-2xl font-bold">{agent.name}</h1>
+          <div className="mt-3 flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[var(--accent)] text-lg font-bold">
+              {agent.name.charAt(0).toUpperCase()}
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight">{agent.name}</h1>
+              <p className="text-sm text-[var(--muted-foreground)]">
+                Created {new Date(agent.createdAt).toLocaleDateString()}
+              </p>
+            </div>
+          </div>
         </div>
         <StatusBadge status={agent.status} />
       </div>
 
-      {/* Deploying indicator */}
-      {TRANSITIONAL_STATES.includes(agent.status) && (
-        <div className="mt-6 flex items-center gap-3 rounded-xl border border-blue-500/30 bg-blue-500/10 p-4">
-          <div className="h-5 w-5 animate-spin rounded-full border-2 border-blue-400 border-t-transparent" />
-          <div>
-            <p className="font-medium text-blue-400">
-              {agent.status === "provisioning"
-                ? "Provisioning..."
-                : agent.status === "starting"
-                  ? "Starting..."
-                  : "Processing..."}
-            </p>
-            <p className="mt-0.5 text-sm text-[var(--muted-foreground)]">
-              This may take a minute. Status updates automatically.
-            </p>
+      {/* Alerts */}
+      <div className="mt-6 space-y-3">
+        {/* Deploying indicator */}
+        {TRANSITIONAL_STATES.includes(agent.status) && (
+          <div className="flex items-center gap-3 rounded-xl border border-blue-500/30 bg-blue-500/5 p-4">
+            <Loader2 className="h-5 w-5 animate-spin text-blue-400 shrink-0" />
+            <div>
+              <p className="font-medium text-blue-400">
+                {agent.status === "provisioning"
+                  ? "Provisioning..."
+                  : agent.status === "starting"
+                    ? "Starting..."
+                    : "Processing..."}
+              </p>
+              <p className="mt-0.5 text-sm text-[var(--muted-foreground)]">
+                This may take a minute. Status updates automatically.
+              </p>
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Telegram Session Alert */}
-      {needsSession && (
-        <div className="mt-6 rounded-xl border border-purple-500/30 bg-purple-500/10 p-4">
-          <p className="font-medium text-purple-400">
-            Telegram session required
-          </p>
-          <p className="mt-1 text-sm text-[var(--muted-foreground)]">
-            Complete the Telegram authentication to start your agent.
-          </p>
-          <Link
-            href={`/dashboard/agents/${agentId}/session`}
-            className="mt-3 inline-block rounded-lg bg-purple-500 px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition-opacity"
-          >
-            Setup Telegram Session
-          </Link>
-        </div>
-      )}
+        {/* Telegram Session Alert */}
+        {needsSession && (
+          <div className="flex items-start gap-3 rounded-xl border border-purple-500/30 bg-purple-500/5 p-4">
+            <MessageSquareWarning className="h-5 w-5 text-purple-400 mt-0.5 shrink-0" />
+            <div>
+              <p className="font-medium text-purple-400">
+                Telegram session required
+              </p>
+              <p className="mt-1 text-sm text-[var(--muted-foreground)]">
+                Complete the Telegram authentication to start your agent.
+              </p>
+              <Link
+                href={`/dashboard/agents/${agentId}/session`}
+                className="mt-3 inline-flex items-center gap-2 rounded-lg bg-purple-500 px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition-opacity"
+              >
+                Setup Telegram Session
+              </Link>
+            </div>
+          </div>
+        )}
 
-      {/* Error Alert */}
-      {agent.lastError && (
-        <div className="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 p-4">
-          <p className="font-medium text-red-400">Error</p>
-          <p className="mt-1 text-sm text-[var(--muted-foreground)]">
-            {agent.lastError}
-          </p>
-        </div>
-      )}
+        {/* Error Alert */}
+        {agent.lastError && (
+          <div className="flex items-start gap-3 rounded-xl border border-red-500/30 bg-red-500/5 p-4">
+            <AlertTriangle className="h-5 w-5 text-red-400 mt-0.5 shrink-0" />
+            <div>
+              <p className="font-medium text-red-400">Error</p>
+              <p className="mt-1 text-sm text-[var(--muted-foreground)]">
+                {agent.lastError}
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Controls */}
-      <div className="mt-6 flex flex-wrap gap-3">
+      <div className="mt-6 flex flex-wrap gap-2">
         {!["running", "starting", "deleting", "provisioning"].includes(agent.status) && (
           <button
             onClick={() => doAction("start")}
             disabled={!!actionLoading}
-            className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
+            className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
           >
+            {actionLoading === "start" ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Play className="h-3.5 w-3.5" />
+            )}
             {actionLoading === "start" ? "Starting..." : "Start"}
           </button>
         )}
@@ -176,15 +233,25 @@ export default function AgentDetailPage({
             <button
               onClick={() => doAction("stop")}
               disabled={!!actionLoading}
-              className="rounded-lg bg-yellow-600 px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
+              className="inline-flex items-center gap-2 rounded-lg bg-yellow-600 px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
             >
+              {actionLoading === "stop" ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Square className="h-3.5 w-3.5" />
+              )}
               {actionLoading === "stop" ? "Stopping..." : "Stop"}
             </button>
             <button
               onClick={() => doAction("restart")}
               disabled={!!actionLoading}
-              className="rounded-lg border border-[var(--border)] px-4 py-2 text-sm hover:bg-[var(--accent)] disabled:opacity-50 transition-colors"
+              className="inline-flex items-center gap-2 rounded-lg border border-[var(--border)] px-4 py-2 text-sm hover:bg-[var(--accent)] disabled:opacity-50 transition-colors"
             >
+              {actionLoading === "restart" ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <RotateCcw className="h-3.5 w-3.5" />
+              )}
               {actionLoading === "restart" ? "Restarting..." : "Restart"}
             </button>
           </>
@@ -193,41 +260,56 @@ export default function AgentDetailPage({
           <button
             onClick={() => doAction("redeploy")}
             disabled={!!actionLoading}
-            className="rounded-lg border border-blue-500/30 px-4 py-2 text-sm text-blue-400 hover:bg-blue-500/10 disabled:opacity-50 transition-colors"
+            className="inline-flex items-center gap-2 rounded-lg border border-blue-500/30 px-4 py-2 text-sm text-blue-400 hover:bg-blue-500/10 disabled:opacity-50 transition-colors"
           >
+            {actionLoading === "redeploy" ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <RefreshCw className="h-3.5 w-3.5" />
+            )}
             {actionLoading === "redeploy" ? "Redeploying..." : "Update & Redeploy"}
           </button>
         )}
         <Link
           href={`/dashboard/agents/${agentId}/logs`}
-          className="rounded-lg border border-[var(--border)] px-4 py-2 text-sm hover:bg-[var(--accent)] transition-colors"
+          className="inline-flex items-center gap-2 rounded-lg border border-[var(--border)] px-4 py-2 text-sm hover:bg-[var(--accent)] transition-colors"
         >
+          <ScrollText className="h-3.5 w-3.5" />
           View Logs
         </Link>
         <button
           onClick={doDelete}
           disabled={!!actionLoading}
-          className="ml-auto rounded-lg border border-red-500/30 px-4 py-2 text-sm text-red-400 hover:bg-red-500/10 disabled:opacity-50 transition-colors"
+          className="ml-auto inline-flex items-center gap-2 rounded-lg border border-red-500/30 px-4 py-2 text-sm text-red-400 hover:bg-red-500/10 disabled:opacity-50 transition-colors"
         >
+          {actionLoading === "delete" ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Trash2 className="h-3.5 w-3.5" />
+          )}
           {actionLoading === "delete" ? "Deleting..." : "Delete"}
         </button>
       </div>
 
       {/* Info Grid */}
-      <div className="mt-8 grid grid-cols-2 gap-4">
+      <div className="mt-8 grid grid-cols-2 gap-3">
         <InfoCard
+          icon={<Activity className="h-4 w-4" />}
           label="Status"
           value={agent.status.replace(/_/g, " ")}
         />
         <InfoCard
+          icon={<Bot className="h-4 w-4" />}
           label="Telegram Session"
           value={agent.telegramSessionStatus}
         />
         <InfoCard
+          icon={<RotateCcw className="h-4 w-4" />}
           label="Restart Count"
           value={String(agent.restartCount)}
         />
         <InfoCard
+          icon={<Clock className="h-4 w-4" />}
           label="Last Health Check"
           value={
             agent.lastHealthCheck
@@ -236,6 +318,7 @@ export default function AgentDetailPage({
           }
         />
         <InfoCard
+          icon={<CalendarDays className="h-4 w-4" />}
           label="Created"
           value={new Date(agent.createdAt).toLocaleString()}
         />
@@ -258,8 +341,11 @@ function DomainCard({ domain }: { domain: string | null }) {
   if (!domain) {
     return (
       <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4">
-        <p className="text-xs text-[var(--muted-foreground)]">Domain</p>
-        <p className="mt-1 font-medium text-[var(--muted-foreground)]">Not assigned</p>
+        <div className="flex items-center gap-2 text-[var(--muted-foreground)]">
+          <Globe className="h-3.5 w-3.5" />
+          <p className="text-xs">Domain</p>
+        </div>
+        <p className="mt-1.5 text-sm font-medium text-[var(--muted-foreground)]">Not assigned</p>
       </div>
     );
   }
@@ -268,14 +354,18 @@ function DomainCard({ domain }: { domain: string | null }) {
 
   return (
     <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4">
-      <p className="text-xs text-[var(--muted-foreground)]">Domain</p>
+      <div className="flex items-center gap-2 text-[var(--muted-foreground)]">
+        <Globe className="h-3.5 w-3.5" />
+        <p className="text-xs">Domain</p>
+      </div>
       <a
         href={url}
         target="_blank"
         rel="noopener noreferrer"
-        className="mt-1 block font-medium text-[var(--primary)] hover:underline truncate"
+        className="mt-1.5 inline-flex items-center gap-1.5 text-sm font-medium text-[var(--primary)] hover:underline truncate"
       >
         {domain}
+        <ExternalLink className="h-3 w-3 shrink-0" />
       </a>
     </div>
   );
@@ -311,32 +401,36 @@ function WalletCard({
 
   if (mnemonic) {
     return (
-      <div className="col-span-2 rounded-xl border border-green-500/30 bg-green-500/10 p-4">
-        <p className="font-medium text-green-400">Wallet Created</p>
-        <p className="mt-1 text-sm text-[var(--muted-foreground)]">
+      <div className="col-span-2 rounded-xl border border-green-500/30 bg-green-500/5 p-5">
+        <div className="flex items-center gap-2 text-green-400">
+          <Wallet className="h-4 w-4" />
+          <p className="font-medium">Wallet Created</p>
+        </div>
+        <p className="mt-1.5 text-sm text-[var(--muted-foreground)]">
           Back up your mnemonic phrase. It will not be shown again in full.
         </p>
-        <div className="mt-3 grid grid-cols-4 gap-2">
+        <div className="mt-4 grid grid-cols-4 gap-2">
           {mnemonic.map((word, i) => (
-            <div key={i} className="rounded bg-[var(--card)] px-2 py-1 text-center text-sm font-mono">
+            <div key={i} className="rounded-lg border border-[var(--border)] bg-[var(--background)] px-2.5 py-1.5 text-center text-sm font-mono">
               <span className="text-[var(--muted-foreground)]">{i + 1}.</span> {word}
             </div>
           ))}
         </div>
-        <div className="mt-3 flex gap-2">
+        <div className="mt-4 flex gap-2">
           <button
             onClick={() => {
               navigator.clipboard.writeText(mnemonic.join(" "));
               setMnemonicCopied(true);
               setTimeout(() => setMnemonicCopied(false), 2000);
             }}
-            className="rounded-lg border border-[var(--border)] px-3 py-1.5 text-sm hover:bg-[var(--accent)] transition-colors"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-3 py-1.5 text-sm hover:bg-[var(--accent)] transition-colors"
           >
+            {mnemonicCopied ? <Check className="h-3.5 w-3.5 text-green-400" /> : <Copy className="h-3.5 w-3.5" />}
             {mnemonicCopied ? "Copied!" : "Copy Mnemonic"}
           </button>
           <button
             onClick={() => setMnemonic(null)}
-            className="rounded-lg bg-green-600 px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 transition-opacity"
+            className="rounded-lg bg-green-600 px-4 py-1.5 text-sm font-medium text-white hover:opacity-90 transition-opacity"
           >
             Done
           </button>
@@ -348,19 +442,23 @@ function WalletCard({
   if (!address) {
     return (
       <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4">
-        <p className="text-xs text-[var(--muted-foreground)]">TON Wallet</p>
+        <div className="flex items-center gap-2 text-[var(--muted-foreground)]">
+          <Wallet className="h-3.5 w-3.5" />
+          <p className="text-xs">TON Wallet</p>
+        </div>
         <button
           onClick={generateWallet}
           disabled={generating}
-          className="mt-1 rounded-lg bg-[var(--primary)] px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
+          className="mt-2 inline-flex items-center gap-2 rounded-lg bg-[var(--primary)] px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
         >
+          {generating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wallet className="h-3.5 w-3.5" />}
           {generating ? "Generating..." : "Generate Wallet"}
         </button>
       </div>
     );
   }
 
-  const copy = () => {
+  const copyAddr = () => {
     navigator.clipboard.writeText(address);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -371,21 +469,25 @@ function WalletCard({
 
   return (
     <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4">
-      <p className="text-xs text-[var(--muted-foreground)]">TON Wallet</p>
-      <div className="mt-1 flex items-center gap-2">
+      <div className="flex items-center gap-2 text-[var(--muted-foreground)]">
+        <Wallet className="h-3.5 w-3.5" />
+        <p className="text-xs">TON Wallet</p>
+      </div>
+      <div className="mt-1.5 flex items-center gap-2">
         <a
           href={explorerUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="font-mono text-sm text-[var(--primary)] hover:underline"
+          className="inline-flex items-center gap-1 font-mono text-sm text-[var(--primary)] hover:underline"
         >
           {short}
+          <ExternalLink className="h-3 w-3" />
         </a>
         <button
-          onClick={copy}
-          className="text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+          onClick={copyAddr}
+          className="text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
         >
-          {copied ? "Copied!" : "Copy"}
+          {copied ? <Check className="h-3.5 w-3.5 text-green-400" /> : <Copy className="h-3.5 w-3.5" />}
         </button>
         <MnemonicRevealButton agentId={agentId} />
       </div>
@@ -418,14 +520,16 @@ function MnemonicRevealButton({ agentId }: { agentId: string }) {
             setCopied(true);
             setTimeout(() => setCopied(false), 2000);
           }}
-          className="text-xs text-[var(--primary)] hover:underline"
+          className="inline-flex items-center gap-1 text-xs text-[var(--primary)] hover:underline"
         >
+          {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
           {copied ? "Copied!" : "Copy Mnemonic"}
         </button>
         <button
           onClick={() => setMnemonic(null)}
-          className="text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+          className="inline-flex items-center gap-1 text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
         >
+          <EyeOff className="h-3 w-3" />
           Hide
         </button>
       </>
@@ -436,8 +540,9 @@ function MnemonicRevealButton({ agentId }: { agentId: string }) {
     <button
       onClick={reveal}
       disabled={loading}
-      className="text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+      className="inline-flex items-center gap-1 text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
     >
+      {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Key className="h-3 w-3" />}
       {loading ? "..." : "Backup"}
     </button>
   );
@@ -455,22 +560,25 @@ function AuthTokenCard({ token }: { token: string }) {
 
   return (
     <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4">
-      <p className="text-xs text-[var(--muted-foreground)]">WebUI Auth Token</p>
-      <div className="mt-1 flex items-center gap-2">
+      <div className="flex items-center gap-2 text-[var(--muted-foreground)]">
+        <KeyRound className="h-3.5 w-3.5" />
+        <p className="text-xs">WebUI Auth Token</p>
+      </div>
+      <div className="mt-1.5 flex items-center gap-2">
         <code className="flex-1 truncate font-mono text-sm">
           {visible ? token : "••••••••••••••••"}
         </code>
         <button
           onClick={() => setVisible(!visible)}
-          className="text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+          className="text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
         >
-          {visible ? "Hide" : "Show"}
+          {visible ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
         </button>
         <button
           onClick={copy}
-          className="text-xs text-[var(--primary)] hover:underline"
+          className="text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
         >
-          {copied ? "Copied!" : "Copy"}
+          {copied ? <Check className="h-3.5 w-3.5 text-green-400" /> : <Copy className="h-3.5 w-3.5" />}
         </button>
       </div>
     </div>
@@ -551,20 +659,30 @@ function SettingsSection({
     <div className="mt-8">
       <button
         onClick={() => setOpen(!open)}
-        className="flex w-full items-center justify-between rounded-xl border border-[var(--border)] bg-[var(--card)] p-4 text-left hover:bg-[var(--accent)] transition-colors"
+        className="flex w-full items-center justify-between rounded-xl border border-[var(--border)] bg-[var(--card)] p-4 text-left hover:border-[var(--muted-foreground)]/30 transition-colors"
       >
-        <span className="font-medium">Settings</span>
-        <span className="text-[var(--muted-foreground)]">{open ? "▲" : "▼"}</span>
+        <span className="inline-flex items-center gap-2 font-medium">
+          <Settings className="h-4 w-4 text-[var(--muted-foreground)]" />
+          Settings
+        </span>
+        {open ? (
+          <ChevronUp className="h-4 w-4 text-[var(--muted-foreground)]" />
+        ) : (
+          <ChevronDown className="h-4 w-4 text-[var(--muted-foreground)]" />
+        )}
       </button>
 
       {open && (
-        <div className="mt-2 rounded-xl border border-[var(--border)] bg-[var(--card)] p-6 space-y-4">
+        <div className="mt-2 rounded-xl border border-[var(--border)] bg-[var(--card)] p-6 space-y-5">
           {/* Name */}
           <SettingsField label="Agent Name" value={name} onChange={setName} />
 
           {/* LLM Settings */}
-          <div className="border-t border-[var(--border)] pt-4">
-            <p className="text-sm font-medium text-[var(--muted-foreground)] mb-3">LLM Configuration</p>
+          <div className="border-t border-[var(--border)] pt-5">
+            <div className="flex items-center gap-2 mb-4">
+              <Brain className="h-4 w-4 text-[var(--muted-foreground)]" />
+              <p className="text-sm font-medium">LLM Configuration</p>
+            </div>
             <div className="grid grid-cols-2 gap-4">
               <SettingsSelect
                 label="Provider"
@@ -580,8 +698,11 @@ function SettingsSection({
           </div>
 
           {/* Telegram Policies */}
-          <div className="border-t border-[var(--border)] pt-4">
-            <p className="text-sm font-medium text-[var(--muted-foreground)] mb-3">Telegram Policies</p>
+          <div className="border-t border-[var(--border)] pt-5">
+            <div className="flex items-center gap-2 mb-4">
+              <Shield className="h-4 w-4 text-[var(--muted-foreground)]" />
+              <p className="text-sm font-medium">Telegram Policies</p>
+            </div>
             <div className="grid grid-cols-2 gap-4">
               <SettingsSelect
                 label="DM Policy"
@@ -601,8 +722,11 @@ function SettingsSection({
           </div>
 
           {/* Optional API Keys */}
-          <div className="border-t border-[var(--border)] pt-4">
-            <p className="text-sm font-medium text-[var(--muted-foreground)] mb-3">Optional API Keys</p>
+          <div className="border-t border-[var(--border)] pt-5">
+            <div className="flex items-center gap-2 mb-4">
+              <Key className="h-4 w-4 text-[var(--muted-foreground)]" />
+              <p className="text-sm font-medium">Optional API Keys</p>
+            </div>
             <div className="grid grid-cols-2 gap-4">
               <SettingsField label="Tavily API Key" value={tavilyApiKey} onChange={setTavilyApiKey} type="password" />
               <SettingsField label="TonAPI Key" value={tonapiKey} onChange={setTonapiKey} type="password" />
@@ -612,12 +736,17 @@ function SettingsSection({
           {/* Feedback */}
           {feedback && (
             <div
-              className={`rounded-lg p-3 text-sm ${
+              className={`flex items-center gap-2 rounded-lg p-3 text-sm ${
                 feedback.type === "success"
                   ? "bg-green-500/10 text-green-400 border border-green-500/30"
                   : "bg-red-500/10 text-red-400 border border-red-500/30"
               }`}
             >
+              {feedback.type === "success" ? (
+                <Check className="h-4 w-4 shrink-0" />
+              ) : (
+                <AlertTriangle className="h-4 w-4 shrink-0" />
+              )}
               {feedback.msg}
             </div>
           )}
@@ -626,8 +755,9 @@ function SettingsSection({
           <button
             onClick={save}
             disabled={saving}
-            className="rounded-lg bg-[var(--primary)] px-6 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
+            className="inline-flex items-center gap-2 rounded-lg bg-[var(--primary)] px-6 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
           >
+            {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
             {saving ? "Saving..." : "Save Changes"}
           </button>
         </div>
@@ -651,13 +781,13 @@ function SettingsField({
 }) {
   return (
     <div>
-      <label className="block text-xs text-[var(--muted-foreground)] mb-1">{label}</label>
+      <label className="block text-xs text-[var(--muted-foreground)] mb-1.5">{label}</label>
       <input
         type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--primary)]"
+        className="w-full rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--primary)] transition-shadow"
       />
     </div>
   );
@@ -676,11 +806,11 @@ function SettingsSelect({
 }) {
   return (
     <div>
-      <label className="block text-xs text-[var(--muted-foreground)] mb-1">{label}</label>
+      <label className="block text-xs text-[var(--muted-foreground)] mb-1.5">{label}</label>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--primary)]"
+        className="w-full rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--primary)] transition-shadow"
       >
         {options.map((opt) => (
           <option key={opt} value={opt}>
@@ -692,33 +822,35 @@ function SettingsSelect({
   );
 }
 
-function InfoCard({ label, value }: { label: string; value: string }) {
+function InfoCard({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
   return (
     <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4">
-      <p className="text-xs text-[var(--muted-foreground)]">{label}</p>
-      <p className="mt-1 font-medium capitalize">{value}</p>
+      <div className="flex items-center gap-2 text-[var(--muted-foreground)]">
+        {icon}
+        <p className="text-xs">{label}</p>
+      </div>
+      <p className="mt-1.5 text-sm font-medium capitalize">{value}</p>
     </div>
   );
 }
 
 function StatusBadge({ status }: { status: string }) {
-  const colors: Record<string, string> = {
-    running: "bg-green-500/20 text-green-400",
-    stopped: "bg-gray-500/20 text-gray-400",
-    starting: "bg-blue-500/20 text-blue-400",
-    error: "bg-red-500/20 text-red-400",
-    provisioning: "bg-yellow-500/20 text-yellow-400",
-    awaiting_session: "bg-purple-500/20 text-purple-400",
-    suspended: "bg-orange-500/20 text-orange-400",
-    deleting: "bg-red-500/20 text-red-400",
+  const config: Record<string, { bg: string; dot: string }> = {
+    running: { bg: "bg-green-500/20 text-green-400", dot: "bg-green-400" },
+    stopped: { bg: "bg-gray-500/20 text-gray-400", dot: "bg-gray-400" },
+    starting: { bg: "bg-blue-500/20 text-blue-400", dot: "bg-blue-400" },
+    error: { bg: "bg-red-500/20 text-red-400", dot: "bg-red-400" },
+    provisioning: { bg: "bg-yellow-500/20 text-yellow-400", dot: "bg-yellow-400" },
+    awaiting_session: { bg: "bg-purple-500/20 text-purple-400", dot: "bg-purple-400" },
+    suspended: { bg: "bg-orange-500/20 text-orange-400", dot: "bg-orange-400" },
+    deleting: { bg: "bg-red-500/20 text-red-400", dot: "bg-red-400" },
   };
 
+  const c = config[status] || { bg: "bg-gray-500/20 text-gray-400", dot: "bg-gray-400" };
+
   return (
-    <span
-      className={`rounded-full px-3 py-1 text-sm font-medium ${
-        colors[status] || "bg-gray-500/20 text-gray-400"
-      }`}
-    >
+    <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-medium ${c.bg}`}>
+      <span className={`inline-block h-2 w-2 rounded-full ${c.dot} ${status === "running" ? "animate-pulse" : ""}`} />
       {status.replace(/_/g, " ")}
     </span>
   );
