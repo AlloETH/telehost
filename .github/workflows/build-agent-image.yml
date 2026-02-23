@@ -8,7 +8,6 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}-agent
 
 jobs:
   build:
@@ -24,6 +23,9 @@ jobs:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Lowercase image name
+        run: echo "IMAGE_NAME=$(echo '${{ github.repository }}-agent' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
 
       - uses: docker/build-push-action@v6
         with:
