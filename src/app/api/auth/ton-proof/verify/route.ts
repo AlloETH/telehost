@@ -4,7 +4,7 @@ import { createSessionToken, setSessionCookie } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
-import { getRedis } from "@/lib/redis";
+import { consumeProofPayload } from "@/lib/proof-store";
 import { Address } from "@ton/core";
 
 export async function POST(req: NextRequest) {
@@ -17,17 +17,13 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Check that the payload was issued by us
-  const payloadExists = await getRedis().get(`ton_proof:${body.proof.payload}`);
-  if (!payloadExists) {
+  // Check that the payload was issued by us and hasn't been used
+  if (!consumeProofPayload(body.proof.payload)) {
     return NextResponse.json(
       { error: "Invalid or expired payload" },
       { status: 400 },
     );
   }
-
-  // Delete the payload so it can't be reused
-  await getRedis().del(`ton_proof:${body.proof.payload}`);
 
   // Determine the app domain from the request
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
