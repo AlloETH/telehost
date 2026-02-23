@@ -1,9 +1,15 @@
 import { NextResponse } from "next/server";
 import { generatePayload } from "@/lib/auth/ton-proof";
-import { setProofPayload } from "@/lib/proof-store";
 
 export async function GET() {
-  const payload = generatePayload();
-  setProofPayload(payload);
-  return NextResponse.json({ payload });
+  try {
+    const payload = generatePayload();
+    return NextResponse.json({ payload });
+  } catch (error) {
+    console.error("Failed to generate payload:", error);
+    return NextResponse.json(
+      { error: "Failed to generate payload" },
+      { status: 500 },
+    );
+  }
 }

@@ -1,9 +1,10 @@
 import nacl from "tweetnacl";
 import { Address, Cell } from "@ton/core";
-import { createHash, randomBytes } from "crypto";
+import { createHash, createHmac, randomBytes } from "crypto";
 
 const TON_PROOF_PREFIX = "ton-proof-item-v2/";
 const TON_CONNECT_PREFIX = "ton-connect";
+const PAYLOAD_TTL_SECONDS = 300; // 5 minutes
 
 export interface TonProofPayload {
   timestamp: number;
@@ -23,8 +24,59 @@ export interface WalletInfo {
   proof: TonProofPayload;
 }
 
+function getHmacSecret(): string {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) throw new Error("JWT_SECRET environment variable is not set");
+  return secret;
+}
+
+/**
+ * Generate a self-signed payload: 16-byte nonce + 4-byte timestamp + 12-byte HMAC.
+ * Total = 32 bytes = 64 hex chars (same format as before).
+ * This is stateless — no in-memory store needed.
+ */
 export function generatePayload(): string {
-  return randomBytes(32).toString("hex");
+  const nonce = randomBytes(16).toString("hex"); // 32 hex chars
+  const ts = Math.floor(Date.now() / 1000)
+    .toString(16)
+    .padStart(8, "0"); // 8 hex chars
+  const data = nonce + ts;
+  const mac = createHmac("sha256", getHmacSecret())
+    .update(data)
+    .digest("hex")
+    .slice(0, 24); // 24 hex chars
+  return data + mac; // 64 hex chars total
+}
+
+/**
+ * Verify that a payload was issued by this server and hasn't expired.
+ */
+export function verifyPayloadIntegrity(
+  payload: string,
+): { valid: boolean; reason?: string } {
+  if (!payload || payload.length !== 64) {
+    return { valid: false, reason: "invalid_payload_length" };
+  }
+
+  const data = payload.slice(0, 40);
+  const mac = payload.slice(40);
+
+  const expectedMac = createHmac("sha256", getHmacSecret())
+    .update(data)
+    .digest("hex")
+    .slice(0, 24);
+
+  if (mac !== expectedMac) {
+    return { valid: false, reason: "payload_not_issued_by_server" };
+  }
+
+  const timestamp = parseInt(payload.slice(32, 40), 16);
+  const now = Math.floor(Date.now() / 1000);
+  if (now - timestamp > PAYLOAD_TTL_SECONDS) {
+    return { valid: false, reason: "payload_expired" };
+  }
+
+  return { valid: true };
 }
 
 export async function verifyTonProof(
