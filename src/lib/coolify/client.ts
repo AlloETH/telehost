@@ -159,7 +159,7 @@ class CoolifyClient {
   ): Promise<string> {
     const params = new URLSearchParams();
     if (opts?.since) params.set("since", String(opts.since));
-    if (opts?.tail) params.set("tail", String(opts.tail));
+    if (opts?.tail) params.set("lines", String(opts.tail));
     const query = params.toString() ? `?${params.toString()}` : "";
     const result = await this.request<unknown>("GET", `/applications/${uuid}/logs${query}`);
     if (typeof result === "string") return result;
@@ -177,7 +177,7 @@ class CoolifyClient {
   async getDeployments(
     uuid: string,
   ): Promise<Array<{ id: number; deployment_uuid: string; status: string; created_at: string }>> {
-    const result = await this.request<unknown>("GET", `/applications/${uuid}/deployments`);
+    const result = await this.request<unknown>("GET", `/deployments/applications/${uuid}`);
     if (Array.isArray(result)) return result;
     if (typeof result === "object" && result !== null) {
       const obj = result as Record<string, unknown>;

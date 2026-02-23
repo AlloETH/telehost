@@ -154,7 +154,10 @@ export async function PATCH(
 
       if (agent.coolifyAppUuid) {
         const coolify = getCoolifyClient();
-        await coolify.updateApp(agent.coolifyAppUuid, { fqdn: newDomain, name: newSlug });
+        await coolify.updateApp(agent.coolifyAppUuid, {
+          docker_compose_domains: [{ name: "agent", domain: newDomain }],
+          name: newSlug,
+        });
         needsRedeploy = true;
       }
     }

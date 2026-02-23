@@ -138,9 +138,13 @@ export async function createAgent(input: CreateAgentInput): Promise<string> {
   // Wait for Coolify to fully index the new application before proceeding
   await waitForCoolifyApp(coolify, coolifyApp.uuid);
 
-  // 6b. Set the FQDN explicitly
+  // 6b. Set the domain for the compose service
   if (agentDomain) {
-    await coolify.updateApp(coolifyApp.uuid, { fqdn: agentDomain });
+    await coolify.updateApp(coolifyApp.uuid, {
+      docker_compose_domains: [
+        { name: "agent", domain: agentDomain },
+      ],
+    });
   }
 
   // 7. Generate TON wallet
@@ -216,6 +220,9 @@ export async function createAgent(input: CreateAgentInput): Promise<string> {
 
 export async function startAgent(agentId: string): Promise<void> {
   const agent = await getAgentOrThrow(agentId);
+  if (!agent.coolifyAppUuid) {
+    throw new Error("Agent has no Coolify application — try recreating it");
+  }
   const coolify = getCoolifyClient();
 
   // Use deploy for first launch or after awaiting_session (never deployed before),
@@ -225,9 +232,9 @@ export async function startAgent(agentId: string): Promise<void> {
     agent.status === "provisioning" ||
     agent.status === "error"
   ) {
-    await coolify.deployApp(agent.coolifyAppUuid!);
+    await coolify.deployApp(agent.coolifyAppUuid);
   } else {
-    await coolify.startApp(agent.coolifyAppUuid!);
+    await coolify.startApp(agent.coolifyAppUuid);
   }
 
   await db
@@ -238,8 +245,11 @@ export async function startAgent(agentId: string): Promise<void> {
 
 export async function stopAgent(agentId: string): Promise<void> {
   const agent = await getAgentOrThrow(agentId);
+  if (!agent.coolifyAppUuid) {
+    throw new Error("Agent has no Coolify application");
+  }
   const coolify = getCoolifyClient();
-  await coolify.stopApp(agent.coolifyAppUuid!);
+  await coolify.stopApp(agent.coolifyAppUuid);
   await db
     .update(agents)
     .set({ status: "stopped", stoppedAt: new Date(), updatedAt: new Date() })
@@ -248,8 +258,11 @@ export async function stopAgent(agentId: string): Promise<void> {
 
 export async function restartAgent(agentId: string): Promise<void> {
   const agent = await getAgentOrThrow(agentId);
+  if (!agent.coolifyAppUuid) {
+    throw new Error("Agent has no Coolify application");
+  }
   const coolify = getCoolifyClient();
-  await coolify.restartApp(agent.coolifyAppUuid!);
+  await coolify.restartApp(agent.coolifyAppUuid);
   await db
     .update(agents)
     .set({ status: "starting", updatedAt: new Date() })
