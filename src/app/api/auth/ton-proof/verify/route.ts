@@ -1,0 +1,85 @@
+import { NextRequest, NextResponse } from "next/server";
+import { verifyTonProof, type WalletInfo } from "@/lib/auth/ton-proof";
+import { createSessionToken, setSessionCookie } from "@/lib/auth/session";
+import { db } from "@/lib/db";
+import { users } from "@/lib/db/schema";
+import { eq } from "drizzle-orm";
+import { getRedis } from "@/lib/redis";
+import { Address } from "@ton/core";
+
+export async function POST(req: NextRequest) {
+  const body = (await req.json()) as WalletInfo;
+
+  if (!body.address || !body.proof) {
+    return NextResponse.json(
+      { error: "Missing address or proof" },
+      { status: 400 },
+    );
+  }
+
+  // Check that the payload was issued by us
+  const payloadExists = await getRedis().get(`ton_proof:${body.proof.payload}`);
+  if (!payloadExists) {
+    return NextResponse.json(
+      { error: "Invalid or expired payload" },
+      { status: 400 },
+    );
+  }
+
+  // Delete the payload so it can't be reused
+  await getRedis().del(`ton_proof:${body.proof.payload}`);
+
+  // Determine the app domain from the request
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const appDomain = new URL(appUrl).hostname;
+
+  // Verify the proof
+  const valid = await verifyTonProof(body, body.proof.payload, appDomain);
+  if (!valid) {
+    return NextResponse.json({ error: "Invalid proof" }, { status: 401 });
+  }
+
+  // Parse wallet address
+  const address = Address.parse(body.address);
+  const friendlyAddress = address.toString({ bounceable: false });
+  const rawAddress = address.toRawString();
+
+  // Upsert user
+  const existingUsers = await db
+    .select()
+    .from(users)
+    .where(eq(users.walletAddressRaw, rawAddress))
+    .limit(1);
+
+  let userId: string;
+
+  if (existingUsers.length > 0) {
+    userId = existingUsers[0].id;
+    await db
+      .update(users)
+      .set({ lastLoginAt: new Date(), updatedAt: new Date() })
+      .where(eq(users.id, userId));
+  } else {
+    const [newUser] = await db
+      .insert(users)
+      .values({
+        walletAddress: friendlyAddress,
+        walletAddressRaw: rawAddress,
+      })
+      .returning();
+    userId = newUser.id;
+  }
+
+  // Create session
+  const token = await createSessionToken({
+    userId,
+    walletAddress: friendlyAddress,
+  });
+  await setSessionCookie(token);
+
+  return NextResponse.json({
+    success: true,
+    userId,
+    walletAddress: friendlyAddress,
+  });
+}
