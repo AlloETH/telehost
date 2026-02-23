@@ -249,6 +249,19 @@ export async function restartAgent(agentId: string): Promise<void> {
     .where(eq(agents.id, agentId));
 }
 
+export async function redeployAgent(agentId: string): Promise<void> {
+  const agent = await getAgentOrThrow(agentId);
+  if (!agent.coolifyAppUuid) {
+    throw new Error("Agent has no Coolify application");
+  }
+  const coolify = getCoolifyClient();
+  await coolify.deployApp(agent.coolifyAppUuid);
+  await db
+    .update(agents)
+    .set({ status: "starting", updatedAt: new Date() })
+    .where(eq(agents.id, agentId));
+}
+
 export async function deleteAgent(agentId: string): Promise<void> {
   const agent = await getAgentOrThrow(agentId);
 
