@@ -23,6 +23,15 @@ export interface CreateDockerImageAppParams {
   limits_cpus?: string;
 }
 
+export interface CreateDockerComposeAppParams {
+  project_uuid: string;
+  server_uuid: string;
+  environment_name: string;
+  docker_compose_raw: string;
+  name?: string;
+  instant_deploy?: boolean;
+}
+
 export interface EnvVar {
   key: string;
   value: string;
@@ -88,6 +97,12 @@ class CoolifyClient {
     params: CreateDockerImageAppParams,
   ): Promise<{ uuid: string }> {
     return this.request("POST", "/applications/dockerimage", params);
+  }
+
+  async createDockerComposeApp(
+    params: CreateDockerComposeAppParams,
+  ): Promise<{ uuid: string }> {
+    return this.request("POST", "/applications/dockercompose", params);
   }
 
   async getApp(uuid: string): Promise<CoolifyApp> {

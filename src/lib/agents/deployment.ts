@@ -3,10 +3,7 @@ import { agents, subscriptions } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { encrypt } from "@/lib/crypto";
 import { generateWallet } from "@/lib/ton/wallet";
-import {
-  getCoolifyClient,
-  type CreateDockerImageAppParams,
-} from "@/lib/coolify/client";
+import { getCoolifyClient } from "@/lib/coolify/client";
 import {
   generateConfigWithToken,
   type AgentConfig,
@@ -96,28 +93,48 @@ export async function createAgent(input: CreateAgentInput): Promise<string> {
     sub.length > 0 ? (sub[0].tier as SubscriptionTier) : "basic";
   const tierConfig = SUBSCRIPTION_TIERS[tier];
 
-  // 6. Create Coolify application
+  // 6. Create Coolify application via Docker Compose (for persistent volume support)
   const coolify = getCoolifyClient();
   const configB64 = Buffer.from(configYaml).toString("base64");
 
-  const appParams: CreateDockerImageAppParams = {
-    name: slug,
-    docker_registry_image_name: TELETON_DOCKER_IMAGE,
-    docker_registry_image_tag: TELETON_DOCKER_TAG,
-    ports_exposes: TELETON_WEBUI_PORT,
+  const composeYaml = [
+    "services:",
+    "  agent:",
+    `    image: ${TELETON_DOCKER_IMAGE}:${TELETON_DOCKER_TAG}`,
+    "    entrypoint: []",
+    `    command: >-`,
+    `      sh -c "`,
+    `      if [ -n \\"$$TELETON_CONFIG_B64\\" ]; then echo \\"$$TELETON_CONFIG_B64\\" | base64 -d > /data/config.yaml; fi &&`,
+    `      if [ -n \\"$$TELETON_SESSION_B64\\" ]; then echo \\"$$TELETON_SESSION_B64\\" | base64 -d > /data/telegram_session.txt; fi &&`,
+    `      if [ -n \\"$$TELETON_WALLET_B64\\" ]; then echo \\"$$TELETON_WALLET_B64\\" | base64 -d > /data/wallet.json && chmod 600 /data/wallet.json; fi &&`,
+    `      mkdir -p /data/workspace &&`,
+    `      exec node dist/cli/index.js start"`,
+    "    volumes:",
+    `      - teleton-data:/data`,
+    "    ports:",
+    `      - "${TELETON_WEBUI_PORT}:${TELETON_WEBUI_PORT}"`,
+    "    environment:",
+    "      - TELETON_HOME=/data",
+    "      - NODE_ENV=production",
+    "    deploy:",
+    "      resources:",
+    "        limits:",
+    `          memory: ${tierConfig.memoryLimitMb}M`,
+    `          cpus: '${tierConfig.cpuLimit}'`,
+    "volumes:",
+    "  teleton-data:",
+  ].join("\n");
+
+  const coolifyApp = await coolify.createDockerComposeApp({
     project_uuid: process.env.COOLIFY_PROJECT_UUID!,
     server_uuid: process.env.COOLIFY_SERVER_UUID!,
     environment_name: process.env.COOLIFY_ENVIRONMENT_NAME || "production",
+    docker_compose_raw: composeYaml,
+    name: slug,
     instant_deploy: false,
-    domains: agentDomain,
-    custom_docker_run_options: `--volume teleton-data-${agent.id}:/data`,
-    limits_memory: `${tierConfig.memoryLimitMb}M`,
-    limits_cpus: tierConfig.cpuLimit,
-  };
+  });
 
-  const coolifyApp = await coolify.createDockerImageApp(appParams);
-
-  // 6b. Set the FQDN explicitly (Coolify auto-generates one otherwise)
+  // 6b. Set the FQDN explicitly
   if (agentDomain) {
     await coolify.updateApp(coolifyApp.uuid, { fqdn: agentDomain });
   }
@@ -139,14 +156,8 @@ export async function createAgent(input: CreateAgentInput): Promise<string> {
     })
     .where(eq(agents.id, agent.id));
 
-  // 8. Set environment variables
+  // 8. Set secret environment variables (non-secrets are in compose file)
   await coolify.bulkSetEnvVars(coolifyApp.uuid, [
-    {
-      key: "TELETON_HOME",
-      value: "/data",
-      is_literal: true,
-      is_shown_once: false,
-    },
     {
       key: "TELETON_CONFIG_B64",
       value: configB64,
@@ -158,12 +169,6 @@ export async function createAgent(input: CreateAgentInput): Promise<string> {
       value: walletB64,
       is_literal: true,
       is_shown_once: true,
-    },
-    {
-      key: "NODE_ENV",
-      value: "production",
-      is_literal: true,
-      is_shown_once: false,
     },
   ]);
 
