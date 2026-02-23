@@ -58,6 +58,7 @@ export function TonConnectAuthButton() {
       body: JSON.stringify({
         address: wallet.account.address,
         network: wallet.account.chain,
+        publicKey: wallet.account.publicKey,
         proof: {
           timestamp: proof.proof.timestamp,
           domain: proof.proof.domain,

@@ -31,29 +31,38 @@ export async function verifyTonProof(
   walletInfo: WalletInfo,
   expectedPayload: string,
   appDomain: string,
-): Promise<boolean> {
+): Promise<{ valid: boolean; reason?: string }> {
   const { address, proof } = walletInfo;
 
   // 1. Verify the payload matches what we issued
   if (proof.payload !== expectedPayload) {
-    return false;
+    return { valid: false, reason: "payload_mismatch" };
   }
 
   // 2. Verify the timestamp is within 15 minutes
   const now = Math.floor(Date.now() / 1000);
   if (Math.abs(now - proof.timestamp) > 900) {
-    return false;
+    return { valid: false, reason: `timestamp_expired (now=${now}, proof=${proof.timestamp})` };
   }
 
   // 3. Verify the domain
   if (proof.domain.value !== appDomain) {
-    return false;
+    return { valid: false, reason: `domain_mismatch (proof="${proof.domain.value}", expected="${appDomain}")` };
   }
 
-  // 4. Extract the public key from stateInit
-  const publicKey = extractPublicKeyFromStateInit(proof.stateInit);
+  // 4. Get the public key — prefer the wallet-provided key, fall back to stateInit extraction
+  let publicKey: Uint8Array | null = null;
+
+  if (walletInfo.publicKey) {
+    publicKey = Buffer.from(walletInfo.publicKey, "hex");
+  }
+
+  if (!publicKey || publicKey.length !== 32) {
+    publicKey = extractPublicKeyFromStateInit(proof.stateInit);
+  }
+
   if (!publicKey) {
-    return false;
+    return { valid: false, reason: "pubkey_extraction_failed" };
   }
 
   // 5. Verify the address matches the public key
@@ -69,7 +78,13 @@ export async function verifyTonProof(
 
   // 7. Verify the signature
   const signatureBytes = Buffer.from(proof.signature, "base64");
-  return nacl.sign.detached.verify(message, signatureBytes, publicKey);
+  const sigValid = nacl.sign.detached.verify(message, signatureBytes, publicKey);
+
+  if (!sigValid) {
+    return { valid: false, reason: "signature_invalid" };
+  }
+
+  return { valid: true };
 }
 
 function createMessage(
@@ -78,8 +93,6 @@ function createMessage(
   timestamp: number,
   payload: string,
 ): Uint8Array {
-  // ton-proof-item-v2/ structure:
-  // "ton-proof-item-v2/" ++ wc(4 bytes) ++ addr_hash(32 bytes) ++ domain_len(4 bytes) ++ domain ++ timestamp(8 bytes) ++ payload
   const wcBuf = Buffer.alloc(4);
   wcBuf.writeInt32LE(address.workChain);
 
@@ -103,7 +116,6 @@ function createMessage(
     payloadBuf,
   ]);
 
-  // Final message = sha256(0xff ++ "ton-connect" ++ sha256(msg))
   const msgHash = createHash("sha256").update(msgBuf).digest();
 
   const fullMsg = Buffer.concat([
@@ -131,7 +143,8 @@ function extractPublicKeyFromStateInit(
     const dataCell = slice.loadRef();
     const dataSlice = dataCell.beginParse();
 
-    // Wallet V4 data: seqno(32) ++ subwallet(32) ++ public_key(256)
+    // Try Wallet V4/V5 data layout: seqno(32) ++ subwallet(32) ++ public_key(256)
+    // Also works for V3: seqno(32) ++ subwallet(32) ++ public_key(256)
     dataSlice.loadUint(32); // seqno
     dataSlice.loadUint(32); // subwallet_id
     const publicKey = dataSlice.loadBuffer(32);

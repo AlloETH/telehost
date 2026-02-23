@@ -30,9 +30,13 @@ export async function POST(req: NextRequest) {
   const appDomain = host.split(":")[0];
 
   // Verify the proof
-  const valid = await verifyTonProof(body, body.proof.payload, appDomain);
-  if (!valid) {
-    return NextResponse.json({ error: "Invalid proof" }, { status: 401 });
+  const result = await verifyTonProof(body, body.proof.payload, appDomain);
+  if (!result.valid) {
+    console.error("TON proof verification failed:", result.reason);
+    return NextResponse.json(
+      { error: "Invalid proof", reason: result.reason },
+      { status: 401 },
+    );
   }
 
   // Parse wallet address
