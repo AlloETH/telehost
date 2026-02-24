@@ -82,9 +82,9 @@ export function TMAProvider({ children }: { children: ReactNode }) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ initData }),
     })
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.success) {
+      .then(async (res) => {
+        const data = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+        if (res.ok && data.success) {
           setState({
             isReady: true,
             userId: data.userId,
@@ -92,7 +92,7 @@ export function TMAProvider({ children }: { children: ReactNode }) {
             telegramUser: data.telegramUser,
           });
         } else {
-          setError(data.error || "Authentication failed");
+          setError(data.error || `Authentication failed (${res.status})`);
         }
       })
       .catch((err) => {
