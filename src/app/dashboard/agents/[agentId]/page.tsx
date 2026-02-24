@@ -32,6 +32,7 @@ import {
   Eye,
   EyeOff,
   Bot,
+  Timer,
 } from "lucide-react";
 
 interface AgentConfig {
@@ -61,6 +62,7 @@ interface Agent {
   restartCount: number;
   createdAt: string;
   updatedAt: string;
+  trialEndsAt: string | null;
   config?: AgentConfig;
 }
 
@@ -186,6 +188,9 @@ export default function AgentDetailPage({
             </div>
           </div>
         )}
+
+        {/* Trial Banner */}
+        {agent.trialEndsAt && <TrialBanner trialEndsAt={agent.trialEndsAt} status={agent.status} />}
 
         {/* Telegram Session Alert */}
         {needsSession && (
@@ -878,6 +883,65 @@ function InfoCard({ icon, label, value }: { icon: React.ReactNode; label: string
         <p className="text-xs">{label}</p>
       </div>
       <p className="mt-1.5 text-sm font-medium capitalize">{value}</p>
+    </div>
+  );
+}
+
+function TrialBanner({ trialEndsAt, status }: { trialEndsAt: string; status: string }) {
+  const [now, setNow] = useState(Date.now());
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const endsAt = new Date(trialEndsAt).getTime();
+  const remaining = endsAt - now;
+  const expired = remaining <= 0;
+
+  if (expired && status === "suspended") {
+    return (
+      <div className="flex items-start gap-3 rounded-xl border border-orange-500/30 bg-orange-500/5 p-4">
+        <Timer className="h-5 w-5 text-orange-400 mt-0.5 shrink-0" />
+        <div>
+          <p className="font-medium text-orange-400">Free trial expired</p>
+          <p className="mt-1 text-sm text-[var(--muted-foreground)]">
+            Subscribe to a plan to restart your agent. Agents are deleted 24 hours after trial expiry.
+          </p>
+          <Link
+            href="/dashboard/billing"
+            className="mt-3 inline-flex items-center gap-2 rounded-lg bg-orange-500 px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition-opacity"
+          >
+            Subscribe Now
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  if (expired) return null;
+
+  const mins = Math.floor(remaining / 60000);
+  const secs = Math.floor((remaining % 60000) / 1000);
+  const timeStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+
+  return (
+    <div className="flex items-center gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">
+      <Timer className="h-5 w-5 text-amber-400 shrink-0" />
+      <div className="flex-1">
+        <p className="font-medium text-amber-400">
+          Free trial — {timeStr} remaining
+        </p>
+        <p className="mt-0.5 text-sm text-[var(--muted-foreground)]">
+          Your agent will stop when the trial ends. Subscribe to keep it running.
+        </p>
+      </div>
+      <Link
+        href="/dashboard/billing"
+        className="shrink-0 rounded-lg bg-amber-500 px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition-opacity"
+      >
+        Subscribe
+      </Link>
     </div>
   );
 }

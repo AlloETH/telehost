@@ -120,7 +120,7 @@ export async function createAgent(input: CreateAgentInput): Promise<string> {
     )
     .limit(1);
 
-  // TODO: re-enable subscription limits after testing
+  const hasActiveSubscription = sub.length > 0;
 
   // 2. Generate slug and check uniqueness
   const slug = nameToSlug(name);
@@ -146,6 +146,10 @@ export async function createAgent(input: CreateAgentInput): Promise<string> {
   const encryptedConfig = encrypt(configYaml);
 
   // 4. Create agent record in DB
+  const trialEndsAt = hasActiveSubscription
+    ? null
+    : new Date(Date.now() + 60 * 60 * 1000); // 1 hour trial
+
   const [agent] = await db
     .insert(agents)
     .values({
@@ -158,6 +162,7 @@ export async function createAgent(input: CreateAgentInput): Promise<string> {
       configEncrypted: encryptedConfig.ciphertext,
       configIv: encryptedConfig.iv,
       configTag: encryptedConfig.tag + ":" + encryptedConfig.salt,
+      trialEndsAt,
     })
     .returning();
 

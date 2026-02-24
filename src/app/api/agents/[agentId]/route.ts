@@ -37,6 +37,7 @@ export async function GET(
       createdAt: agents.createdAt,
       updatedAt: agents.updatedAt,
       stoppedAt: agents.stoppedAt,
+      trialEndsAt: agents.trialEndsAt,
       configEncrypted: agents.configEncrypted,
       configIv: agents.configIv,
       configTag: agents.configTag,

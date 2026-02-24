@@ -52,6 +52,12 @@ export async function activateSubscription(
       .update(payments)
       .set({ subscriptionId: sub.id })
       .where(eq(payments.id, paymentId));
+
+    // Clear trial on all user's agents
+    await db
+      .update(agents)
+      .set({ trialEndsAt: null, updatedAt: now })
+      .where(eq(agents.userId, userId));
   } else {
     const [newSub] = await db
       .insert(subscriptions)
@@ -71,6 +77,12 @@ export async function activateSubscription(
       .update(payments)
       .set({ subscriptionId: newSub.id })
       .where(eq(payments.id, paymentId));
+
+    // Clear trial on all user's agents
+    await db
+      .update(agents)
+      .set({ trialEndsAt: null, updatedAt: now })
+      .where(eq(agents.userId, userId));
   }
 }
 

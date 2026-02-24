@@ -134,6 +134,9 @@ export const agents = pgTable(
     // Workspace archive (base64-encoded tar.gz, synced from container)
     workspaceArchive: text("workspace_archive"),
 
+    // Trial
+    trialEndsAt: timestamp("trial_ends_at"),
+
     // Metadata
     lastHealthCheck: timestamp("last_health_check"),
     lastError: text("last_error"),
