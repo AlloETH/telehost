@@ -295,7 +295,10 @@ export async function restartAgent(agentId: string): Promise<void> {
     throw new Error("Agent has no Coolify application");
   }
   const coolify = getCoolifyClient();
-  await coolify.restartApplication(agent.coolifyAppUuid);
+  // Stop first to allow shutdown sync, then start fresh
+  await coolify.stopApplication(agent.coolifyAppUuid);
+  await coolify.waitForApplicationStopped(agent.coolifyAppUuid);
+  await coolify.startApplication(agent.coolifyAppUuid);
   await db
     .update(agents)
     .set({ status: "starting", updatedAt: new Date() })
@@ -307,9 +310,12 @@ export async function redeployAgent(agentId: string): Promise<void> {
   if (!agent.coolifyAppUuid) {
     throw new Error("Agent has no Coolify application");
   }
-  // Sync env vars from DB to Coolify, then restart
-  await updateAgentEnvVars(agentId);
   const coolify = getCoolifyClient();
+  // Stop first to allow the container's shutdown hook to sync workspace data
+  await coolify.stopApplication(agent.coolifyAppUuid);
+  await coolify.waitForApplicationStopped(agent.coolifyAppUuid);
+  // Now update env vars and start fresh
+  await updateAgentEnvVars(agentId);
   await coolify.startApplication(agent.coolifyAppUuid);
   await db
     .update(agents)

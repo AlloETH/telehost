@@ -60,6 +60,10 @@ upload_data() {
 # --- Signal handler ---
 shutdown() {
   echo "[sync] Received shutdown signal, syncing data..."
+  # Kill periodic sync
+  if [ -n "$SYNC_PID" ]; then
+    kill "$SYNC_PID" 2>/dev/null || true
+  fi
   # Kill the agent process gracefully
   if [ -n "$AGENT_PID" ]; then
     kill -TERM "$AGENT_PID" 2>/dev/null || true
@@ -70,6 +74,15 @@ shutdown() {
 }
 
 trap shutdown TERM INT
+
+# --- Periodic background sync (every 5 minutes) ---
+periodic_sync() {
+  while true; do
+    sleep 300
+    echo "[sync] Periodic sync triggered"
+    upload_data
+  done
+}
 
 # 1. Restore persisted data
 restore_data
@@ -88,7 +101,11 @@ fi
 
 mkdir -p "${DATA_DIR}/workspace"
 
-# 3. Start agent in background so we can trap signals
+# 3. Start periodic sync in background
+periodic_sync &
+SYNC_PID=$!
+
+# 4. Start agent in background so we can trap signals
 node dist/cli/index.js start &
 AGENT_PID=$!
 
@@ -96,7 +113,10 @@ AGENT_PID=$!
 wait "$AGENT_PID"
 EXIT_CODE=$?
 
-# Agent exited on its own — sync before container dies
+# Agent exited on its own — stop periodic sync and upload before container dies
+if [ -n "$SYNC_PID" ]; then
+  kill "$SYNC_PID" 2>/dev/null || true
+fi
 upload_data
 
 exit $EXIT_CODE

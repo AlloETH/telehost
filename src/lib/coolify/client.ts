@@ -176,6 +176,33 @@ class CoolifyClient {
     });
   }
 
+  // === Status Polling ===
+
+  async waitForApplicationStopped(
+    uuid: string,
+    timeoutMs: number = 30000,
+  ): Promise<void> {
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+      try {
+        const app = await this.getApplication(uuid);
+        const status = (app.status || "").toLowerCase();
+        if (
+          status.includes("stopped") ||
+          status.includes("exited") ||
+          status === "offline"
+        ) {
+          return;
+        }
+      } catch {
+        // App may already be gone — treat as stopped
+        return;
+      }
+      await new Promise((r) => setTimeout(r, 2000));
+    }
+    // Timed out — proceed anyway, periodic sync should have saved recent data
+  }
+
   // === Health Check ===
 
   async checkHealth(): Promise<boolean> {
