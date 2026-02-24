@@ -64,6 +64,7 @@ export const users = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     walletAddress: varchar("wallet_address", { length: 66 }).notNull(),
     walletAddressRaw: varchar("wallet_address_raw", { length: 66 }).notNull(),
+    telegramUserId: varchar("telegram_user_id", { length: 20 }),
     displayName: varchar("display_name", { length: 100 }),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -72,6 +73,7 @@ export const users = pgTable(
   (table) => [
     uniqueIndex("users_wallet_address_idx").on(table.walletAddress),
     uniqueIndex("users_wallet_address_raw_idx").on(table.walletAddressRaw),
+    uniqueIndex("users_telegram_user_id_idx").on(table.telegramUserId),
   ],
 );
 

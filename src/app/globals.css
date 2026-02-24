@@ -44,6 +44,11 @@ body {
   background-clip: text;
 }
 
+/* Safe area for TMA bottom nav */
+.safe-area-pb {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
 /* Subtle grid background */
 .grid-bg {
   background-image:

@@ -7,6 +7,7 @@ const PUBLIC_PATHS = [
   "/",
   "/api/auth/ton-proof/payload",
   "/api/auth/ton-proof/verify",
+  "/api/auth/tma/validate",
   "/api/cron",
 ];
 
@@ -24,8 +25,17 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  // Only protect /dashboard and /api routes
-  if (!pathname.startsWith("/dashboard") && !pathname.startsWith("/api")) {
+  // Only protect /dashboard, /tma, and /api routes
+  if (
+    !pathname.startsWith("/dashboard") &&
+    !pathname.startsWith("/tma") &&
+    !pathname.startsWith("/api")
+  ) {
+    return NextResponse.next();
+  }
+
+  // TMA pages handle their own auth via initData validation
+  if (pathname.startsWith("/tma")) {
     return NextResponse.next();
   }
 
@@ -53,5 +63,5 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/api/:path*"],
+  matcher: ["/dashboard/:path*", "/tma/:path*", "/api/:path*"],
 };
