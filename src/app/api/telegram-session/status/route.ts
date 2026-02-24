@@ -26,5 +26,6 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     status: status.status,
     error: status.error,
+    ...(status.sessionString && { sessionString: status.sessionString }),
   });
 }
