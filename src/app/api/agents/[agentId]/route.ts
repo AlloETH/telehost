@@ -231,7 +231,7 @@ export async function PATCH(
 
   await db.update(agents).set(dbUpdates).where(eq(agents.id, agentId));
 
-  // Rebuild compose with updated values and redeploy
+  // Update env vars and redeploy
   if (needsRedeploy && agent.coolifyAppUuid) {
     await updateAgentEnvVars(agentId, { configB64: newConfigB64 });
     const coolify = getCoolifyClient();

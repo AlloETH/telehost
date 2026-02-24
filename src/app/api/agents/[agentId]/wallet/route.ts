@@ -55,7 +55,7 @@ export async function POST(
     })
     .where(eq(agents.id, agentId));
 
-  // Update compose with wallet and redeploy
+  // Update env vars with wallet and redeploy
   if (agent.coolifyAppUuid) {
     const { updateAgentEnvVars } = await import("@/lib/agents/deployment");
     await updateAgentEnvVars(agentId, { walletB64 });
