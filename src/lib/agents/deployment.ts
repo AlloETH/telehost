@@ -3,7 +3,7 @@ import { agents, subscriptions } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { encrypt, decrypt } from "@/lib/crypto";
 import { generateWallet, reconstructWalletJson } from "@/lib/ton/wallet";
-import { getCoolifyClient } from "@/lib/coolify/client";
+import { getCoolifyClient, type EnvVar } from "@/lib/coolify/client";
 import {
   generateConfigWithToken,
   type AgentConfig,
@@ -17,49 +17,24 @@ import {
 } from "@/lib/constants";
 import { nameToSlug } from "@/lib/agents/slug";
 
-// Build Docker Compose YAML with actual env var values embedded directly.
-function buildComposeYaml(opts: {
+// Build env vars array for Coolify bulk endpoint.
+function buildEnvVars(opts: {
   configB64?: string;
   walletB64?: string;
   sessionB64?: string;
-  memoryLimitMb: number;
-  cpuLimit: string;
-}): string {
-  const lines = [
-    "services:",
-    "  agent:",
-    `    image: ${TELETON_DOCKER_IMAGE}:${TELETON_DOCKER_TAG}`,
-    "    volumes:",
-    "      - teleton-data:/data",
-    "    ports:",
-    `      - "${TELETON_WEBUI_PORT}:${TELETON_WEBUI_PORT}"`,
-    "    environment:",
-    "      - TELETON_HOME=/data",
-    "      - NODE_ENV=production",
-    `      - TELETON_CONFIG_B64=${opts.configB64 || ""}`,
-    `      - TELETON_SESSION_B64=${opts.sessionB64 || ""}`,
-    `      - TELETON_WALLET_B64=${opts.walletB64 || ""}`,
-    "    healthcheck:",
-    `      test: ["CMD", "node", "-e", "fetch('http://localhost:${TELETON_WEBUI_PORT}/').then(r=>{process.exit(r.status<500?0:1)}).catch(()=>process.exit(1))"]`,
-    "      interval: 30s",
-    "      timeout: 10s",
-    "      start_period: 40s",
-    "      retries: 3",
-    "    deploy:",
-    "      resources:",
-    "        limits:",
-    `          memory: ${opts.memoryLimitMb}M`,
-    `          cpus: '${opts.cpuLimit}'`,
-    "volumes:",
-    "  teleton-data:",
+}): EnvVar[] {
+  return [
+    { key: "TELETON_HOME", value: "/data", is_build_time: false },
+    { key: "NODE_ENV", value: "production", is_build_time: false },
+    { key: "TELETON_CONFIG_B64", value: opts.configB64 || "", is_build_time: false },
+    { key: "TELETON_SESSION_B64", value: opts.sessionB64 || "", is_build_time: false },
+    { key: "TELETON_WALLET_B64", value: opts.walletB64 || "", is_build_time: false },
   ];
-
-  return lines.join("\n");
 }
 
-// Rebuild compose YAML from DB data and update it in Coolify.
+// Update env vars on Coolify application from DB data.
 // Pass overrides for values you already have to avoid unnecessary decryption.
-export async function rebuildAndUpdateCompose(
+export async function updateAgentEnvVars(
   agentId: string,
   overrides?: {
     configB64?: string;
@@ -69,18 +44,6 @@ export async function rebuildAndUpdateCompose(
 ): Promise<void> {
   const agent = await getAgentOrThrow(agentId);
   if (!agent.coolifyAppUuid) return;
-
-  // Determine resource limits from subscription tier
-  const sub = await db
-    .select()
-    .from(subscriptions)
-    .where(
-      and(eq(subscriptions.userId, agent.userId), eq(subscriptions.status, "active")),
-    )
-    .limit(1);
-  const tier: SubscriptionTier =
-    sub.length > 0 ? (sub[0].tier as SubscriptionTier) : "basic";
-  const tierConfig = SUBSCRIPTION_TIERS[tier];
 
   // Reconstruct config B64
   let configB64 = overrides?.configB64;
@@ -121,18 +84,9 @@ export async function rebuildAndUpdateCompose(
     sessionB64 = Buffer.from(session).toString("base64");
   }
 
-  const composeYaml = buildComposeYaml({
-    configB64,
-    walletB64,
-    sessionB64,
-    memoryLimitMb: tierConfig.memoryLimitMb,
-    cpuLimit: tierConfig.cpuLimit,
-  });
-
+  const envVars = buildEnvVars({ configB64, walletB64, sessionB64 });
   const coolify = getCoolifyClient();
-  await coolify.updateApplication(agent.coolifyAppUuid, {
-    docker_compose_raw: Buffer.from(composeYaml).toString("base64"),
-  });
+  await coolify.bulkSetEnvVars(agent.coolifyAppUuid, envVars);
 }
 
 export interface CreateAgentInput {
@@ -200,23 +154,30 @@ export async function createAgent(input: CreateAgentInput): Promise<string> {
     sub.length > 0 ? (sub[0].tier as SubscriptionTier) : "basic";
   const tierConfig = SUBSCRIPTION_TIERS[tier];
 
-  // 6. Create Coolify application via Docker Compose
+  // 6. Create Coolify Docker Image application
   const coolify = getCoolifyClient();
-  const configB64 = Buffer.from(configYaml).toString("base64");
-
-  const initialComposeYaml = buildComposeYaml({
-    configB64,
-    memoryLimitMb: tierConfig.memoryLimitMb,
-    cpuLimit: tierConfig.cpuLimit,
-  });
 
   const coolifyApp = await coolify.createApplication({
     project_uuid: process.env.COOLIFY_PROJECT_UUID!,
     server_uuid: process.env.COOLIFY_SERVER_UUID!,
     environment_name: process.env.COOLIFY_ENVIRONMENT_NAME || "production",
-    docker_compose_raw: Buffer.from(initialComposeYaml).toString("base64"),
+    destination_uuid: process.env.COOLIFY_DESTINATION_UUID!,
+    docker_registry_image_name: TELETON_DOCKER_IMAGE,
+    docker_registry_image_tag: TELETON_DOCKER_TAG,
+    ports_exposes: TELETON_WEBUI_PORT,
     name: slug,
+    domains: agentDomain,
     instant_deploy: false,
+    custom_docker_run_options: "-v teleton-data:/data",
+    limits_memory: `${tierConfig.memoryLimitMb}M`,
+    limits_cpus: tierConfig.cpuLimit,
+    health_check_enabled: true,
+    health_check_path: "/",
+    health_check_port: TELETON_WEBUI_PORT,
+    health_check_interval: 30,
+    health_check_timeout: 10,
+    health_check_retries: 3,
+    health_check_start_period: 40,
   });
 
   // Save Coolify UUID immediately so cleanup works even if later steps fail
@@ -227,13 +188,6 @@ export async function createAgent(input: CreateAgentInput): Promise<string> {
 
   // Wait for Coolify to fully index the new application
   await waitForCoolifyApp(coolify, coolifyApp.uuid);
-
-  // Set domain mapping via docker_compose_domains if domain is configured
-  if (agentDomain) {
-    await coolify.updateApplication(coolifyApp.uuid, {
-      docker_compose_domains: JSON.stringify({ agent: { domain: agentDomain } }),
-    });
-  }
 
   // 7. Generate TON wallet
   const wallet = await generateWallet();
@@ -279,17 +233,10 @@ export async function createAgent(input: CreateAgentInput): Promise<string> {
       .where(eq(agents.id, agent.id));
   }
 
-  // 9. Update compose with all B64 secrets embedded directly
-  const finalComposeYaml = buildComposeYaml({
-    configB64,
-    walletB64,
-    sessionB64,
-    memoryLimitMb: tierConfig.memoryLimitMb,
-    cpuLimit: tierConfig.cpuLimit,
-  });
-  await coolify.updateApplication(coolifyApp.uuid, {
-    docker_compose_raw: Buffer.from(finalComposeYaml).toString("base64"),
-  });
+  // 9. Set all env vars on the Coolify application
+  const configB64 = Buffer.from(configYaml).toString("base64");
+  const envVars = buildEnvVars({ configB64, walletB64, sessionB64 });
+  await coolify.bulkSetEnvVars(coolifyApp.uuid, envVars);
 
   // 10. Deploy if session is ready
   if (input.telegramSessionString) {
@@ -343,8 +290,8 @@ export async function redeployAgent(agentId: string): Promise<void> {
   if (!agent.coolifyAppUuid) {
     throw new Error("Agent has no Coolify application");
   }
-  // Rebuild compose to ensure env vars are embedded directly
-  await rebuildAndUpdateCompose(agentId);
+  // Sync env vars from DB to Coolify, then restart
+  await updateAgentEnvVars(agentId);
   const coolify = getCoolifyClient();
   await coolify.startApplication(agent.coolifyAppUuid);
   await db
@@ -411,9 +358,9 @@ export async function injectTelegramSession(
     })
     .where(eq(agents.id, agentId));
 
-  // Rebuild compose with session embedded directly
+  // Update env vars with session embedded
   const sessionB64 = Buffer.from(sessionString).toString("base64");
-  await rebuildAndUpdateCompose(agentId, { sessionB64 });
+  await updateAgentEnvVars(agentId, { sessionB64 });
 }
 
 async function getAgentOrThrow(agentId: string) {

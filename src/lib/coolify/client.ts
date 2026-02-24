@@ -12,10 +12,24 @@ export interface CreateApplicationParams {
   project_uuid: string;
   server_uuid: string;
   environment_name: string;
-  docker_compose_raw: string;
+  destination_uuid: string;
+  docker_registry_image_name: string;
+  docker_registry_image_tag: string;
+  ports_exposes: string;
   name: string;
   description?: string;
+  domains?: string;
   instant_deploy?: boolean;
+  custom_docker_run_options?: string;
+  limits_memory?: string;
+  limits_cpus?: string;
+  health_check_enabled?: boolean;
+  health_check_path?: string;
+  health_check_port?: string;
+  health_check_interval?: number;
+  health_check_timeout?: number;
+  health_check_retries?: number;
+  health_check_start_period?: number;
 }
 
 export interface EnvVar {
@@ -32,8 +46,6 @@ export interface CoolifyApplication {
   name: string;
   status: string;
   fqdn?: string;
-  docker_compose_raw?: string;
-  docker_compose_domains?: string;
   [key: string]: unknown;
 }
 
@@ -79,12 +91,12 @@ class CoolifyClient {
     return res.text() as unknown as T;
   }
 
-  // === Applications (Docker Compose) ===
+  // === Applications (Docker Image) ===
 
   async createApplication(
     params: CreateApplicationParams,
   ): Promise<{ uuid: string }> {
-    return this.request("POST", "/applications/dockercompose", params);
+    return this.request("POST", "/applications/dockerimage", params);
   }
 
   async getApplication(uuid: string): Promise<CoolifyApplication> {

@@ -57,8 +57,8 @@ export async function POST(
 
   // Update compose with wallet and redeploy
   if (agent.coolifyAppUuid) {
-    const { rebuildAndUpdateCompose } = await import("@/lib/agents/deployment");
-    await rebuildAndUpdateCompose(agentId, { walletB64 });
+    const { updateAgentEnvVars } = await import("@/lib/agents/deployment");
+    await updateAgentEnvVars(agentId, { walletB64 });
     const coolify = getCoolifyClient();
     await coolify.startApplication(agent.coolifyAppUuid);
   }

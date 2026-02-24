@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { agents } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
-import { deleteAgent, rebuildAndUpdateCompose } from "@/lib/agents/deployment";
+import { deleteAgent, updateAgentEnvVars } from "@/lib/agents/deployment";
 import { syncAgentFromCoolify } from "@/lib/agents/sync-status";
 import { encrypt, decrypt } from "@/lib/crypto";
 import { generateConfigYaml } from "@/lib/agents/config-generator";
@@ -158,7 +158,7 @@ export async function PATCH(
         const coolify = getCoolifyClient();
         await coolify.updateApplication(agent.coolifyAppUuid, {
           name: newSlug,
-          docker_compose_domains: JSON.stringify({ agent: { domain: newDomain } }),
+          domains: newDomain,
         });
         needsRedeploy = true;
       }
@@ -231,7 +231,7 @@ export async function PATCH(
 
   // Rebuild compose with updated values and redeploy
   if (needsRedeploy && agent.coolifyAppUuid) {
-    await rebuildAndUpdateCompose(agentId, { configB64: newConfigB64 });
+    await updateAgentEnvVars(agentId, { configB64: newConfigB64 });
     const coolify = getCoolifyClient();
     await coolify.startApplication(agent.coolifyAppUuid);
   }
