@@ -15,7 +15,7 @@ const createAgentSchema = z.object({
   telegramApiId: z.number().int().positive(),
   telegramApiHash: z.string().min(1),
   telegramPhone: z.string().min(1),
-  adminIds: z.array(z.number().int()),
+  adminIds: z.array(z.number().int()).default([]),
   dmPolicy: z.string().optional(),
   groupPolicy: z.string().optional(),
   requireMention: z.boolean().optional(),

@@ -8,6 +8,7 @@ import {
   useTelegramMainButton,
   useTelegramHaptic,
 } from "@/lib/hooks/use-telegram";
+import { useTMA } from "@/app/tma/tma-provider";
 
 interface ProviderModel {
   value: string;
@@ -143,6 +144,7 @@ type VerifyStep = "idle" | "sending" | "code" | "2fa" | "verified";
 export default function TMADeployPage() {
   const router = useRouter();
   const haptic = useTelegramHaptic();
+  const { telegramUser } = useTMA();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -168,6 +170,7 @@ export default function TMADeployPage() {
     telegramApiId: "",
     telegramApiHash: "",
     telegramPhone: "",
+    adminIds: telegramUser?.id ? String(telegramUser.id) : "",
     dmPolicy: "pairing",
     groupPolicy: "open",
     ownerName: "",
@@ -361,12 +364,24 @@ export default function TMADeployPage() {
       const res = await fetch("/api/agents", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, sessionString }),
+        body: JSON.stringify({
+          ...form,
+          telegramApiId: parseInt(form.telegramApiId, 10),
+          adminIds: form.adminIds
+            .split(",")
+            .map((id) => parseInt(id.trim(), 10))
+            .filter((id) => !isNaN(id)),
+          ownerName: form.ownerName || undefined,
+          ownerUsername: form.ownerUsername || undefined,
+          tavilyApiKey: form.tavilyApiKey || undefined,
+          tonapiKey: form.tonapiKey || undefined,
+          telegramSessionString: sessionString || undefined,
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       haptic.notification("success");
-      router.push(`/tma/agents/${data.agent.id}`);
+      router.push(`/tma/agents/${data.agentId}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Deploy failed");
       haptic.notification("error");
@@ -474,6 +489,13 @@ export default function TMADeployPage() {
           <Field label="API ID" value={form.telegramApiId} onChange={(v) => update("telegramApiId", v)} placeholder="12345678" inputMode="numeric" />
           <Field label="API Hash" value={form.telegramApiHash} onChange={(v) => update("telegramApiHash", v)} placeholder="0123456789abcdef..." />
           <Field label="Phone Number" value={form.telegramPhone} onChange={(v) => update("telegramPhone", v)} placeholder="+1234567890" type="tel" />
+
+          <div>
+            <Field label="Your Telegram ID" value={form.adminIds} onChange={(v) => update("adminIds", v)} placeholder="123456789" inputMode="numeric" />
+            <p className="mt-1 text-xs text-[var(--muted-foreground)]">
+              Message @userinfobot on Telegram to get your ID. Separate multiple IDs with commas.
+            </p>
+          </div>
 
           <div>
             <label className="block text-xs text-[var(--muted-foreground)] mb-1.5">DM Policy</label>
