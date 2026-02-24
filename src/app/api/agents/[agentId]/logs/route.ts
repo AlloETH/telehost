@@ -31,73 +31,29 @@ export async function GET(
 
   if (!agent.coolifyAppUuid) {
     return NextResponse.json({
-      logs: "Agent has no Coolify service yet.",
+      logs: "Agent has no Coolify application yet.",
       type: "info",
+      status: null,
     });
   }
 
   const coolify = getCoolifyClient();
 
-  // Get the service to find the application UUID
   try {
-    const service = await coolify.getService(agent.coolifyAppUuid);
-
-    // Try to get logs from the first service application
-    if (
-      Array.isArray(service.applications) &&
-      service.applications.length > 0
-    ) {
-      const appUuid = service.applications[0].uuid;
-      try {
-        const logs = await coolify.getApplicationLogs(appUuid, tail);
-        return NextResponse.json({
-          logs,
-          type: "runtime",
-          status: service.status || null,
-        });
-      } catch (logErr) {
-        // Logs endpoint not available — fall through to status info
-        console.log(
-          `[logs] Application logs not available for ${appUuid}:`,
-          logErr instanceof Error ? logErr.message : logErr,
-        );
-      }
-    }
-
-    // Fallback: return service status info as "logs"
-    const statusInfo = [
-      `Service: ${agent.coolifyAppUuid}`,
-      `Status: ${service.status || "unknown"}`,
-      `Name: ${service.name || agent.name}`,
-    ];
-
-    if (service.fqdn) statusInfo.push(`Domain: ${service.fqdn}`);
-
-    if (agent.lastError) {
-      statusInfo.push("", `Last error: ${agent.lastError}`);
-    }
-
-    if (agent.lastHealthCheck) {
-      statusInfo.push(
-        `Last health check: ${new Date(agent.lastHealthCheck).toISOString()}`,
-      );
-    }
-
-    statusInfo.push(
-      "",
-      "Container logs are not available via the Coolify API for this service type.",
-      "Check the Coolify dashboard for detailed container logs.",
-    );
+    const [logs, app] = await Promise.all([
+      coolify.getApplicationLogs(agent.coolifyAppUuid, tail),
+      coolify.getApplication(agent.coolifyAppUuid).catch(() => null),
+    ]);
 
     return NextResponse.json({
-      logs: statusInfo.join("\n"),
-      type: "info",
-      status: service.status || null,
+      logs: logs || "No logs available.",
+      type: "runtime",
+      status: app?.status || null,
     });
   } catch (err) {
     if (err instanceof CoolifyApiError) {
       return NextResponse.json({
-        logs: `Failed to fetch from Coolify: ${err.message}`,
+        logs: `Failed to fetch logs: ${err.message}`,
         type: "error",
         status: null,
       });

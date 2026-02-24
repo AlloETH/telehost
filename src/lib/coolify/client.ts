@@ -8,12 +8,12 @@ export class CoolifyApiError extends Error {
   }
 }
 
-export interface CreateServiceParams {
+export interface CreateApplicationParams {
   project_uuid: string;
   server_uuid: string;
   environment_name: string;
   docker_compose_raw: string;
-  name?: string;
+  name: string;
   description?: string;
   instant_deploy?: boolean;
 }
@@ -27,20 +27,13 @@ export interface EnvVar {
   is_shown_once?: boolean;
 }
 
-export interface CoolifyServiceApplication {
+export interface CoolifyApplication {
   uuid: string;
   name: string;
   status: string;
   fqdn?: string;
-  [key: string]: unknown;
-}
-
-export interface CoolifyService {
-  uuid: string;
-  name: string;
-  status: string;
-  fqdn?: string;
-  applications?: CoolifyServiceApplication[];
+  docker_compose_raw?: string;
+  docker_compose_domains?: string;
   [key: string]: unknown;
 }
 
@@ -86,75 +79,67 @@ class CoolifyClient {
     return res.text() as unknown as T;
   }
 
-  // === Services (Docker Compose) ===
+  // === Applications (Docker Compose) ===
 
-  async createService(
-    params: CreateServiceParams,
+  async createApplication(
+    params: CreateApplicationParams,
   ): Promise<{ uuid: string }> {
-    return this.request("POST", "/services", params);
+    return this.request("POST", "/applications/dockercompose", params);
   }
 
-  async getService(uuid: string): Promise<CoolifyService> {
-    return this.request("GET", `/services/${uuid}`);
+  async getApplication(uuid: string): Promise<CoolifyApplication> {
+    return this.request("GET", `/applications/${uuid}`);
   }
 
-  async updateService(
+  async updateApplication(
     uuid: string,
     params: Record<string, unknown>,
   ): Promise<void> {
-    await this.request("PATCH", `/services/${uuid}`, params);
+    await this.request("PATCH", `/applications/${uuid}`, params);
   }
 
-  async deleteService(uuid: string): Promise<void> {
-    await this.request("DELETE", `/services/${uuid}`);
+  async deleteApplication(uuid: string): Promise<void> {
+    await this.request("DELETE", `/applications/${uuid}`);
   }
 
   // === Lifecycle ===
 
-  async deployService(uuid: string): Promise<void> {
-    await this.request("POST", `/services/${uuid}/start`);
+  async startApplication(uuid: string): Promise<void> {
+    await this.request("GET", `/applications/${uuid}/start`);
   }
 
-  async stopService(uuid: string): Promise<void> {
-    await this.request("POST", `/services/${uuid}/stop`);
+  async stopApplication(uuid: string): Promise<void> {
+    await this.request("GET", `/applications/${uuid}/stop`);
   }
 
-  async restartService(uuid: string): Promise<void> {
-    await this.request("POST", `/services/${uuid}/restart`);
-  }
-
-  // === Environment Variables ===
-
-  async setServiceEnvVar(uuid: string, envVar: EnvVar): Promise<void> {
-    await this.request("POST", `/services/${uuid}/envs`, envVar);
-  }
-
-  async bulkSetServiceEnvVars(uuid: string, envVars: EnvVar[]): Promise<void> {
-    await this.request("PATCH", `/services/${uuid}/envs/bulk`, {
-      data: envVars,
-    });
+  async restartApplication(uuid: string): Promise<void> {
+    await this.request("GET", `/applications/${uuid}/restart`);
   }
 
   // === Logs ===
 
   async getApplicationLogs(
-    appUuid: string,
+    uuid: string,
     lines: number = 100,
   ): Promise<string> {
-    try {
-      const data = await this.request<unknown>(
-        "GET",
-        `/applications/${appUuid}/logs?lines=${lines}`,
-      );
-      if (Array.isArray(data)) return data.join("\n");
-      if (typeof data === "string") return data;
-      return JSON.stringify(data);
-    } catch (err) {
-      if (err instanceof CoolifyApiError && err.statusCode === 404) {
-        throw new Error("Logs endpoint not available for this resource");
-      }
-      throw err;
-    }
+    const data = await this.request<{ logs?: string }>(
+      "GET",
+      `/applications/${uuid}/logs?lines=${lines}`,
+    );
+    if (typeof data === "string") return data;
+    return data.logs || "";
+  }
+
+  // === Environment Variables ===
+
+  async setEnvVar(uuid: string, envVar: EnvVar): Promise<void> {
+    await this.request("POST", `/applications/${uuid}/envs`, envVar);
+  }
+
+  async bulkSetEnvVars(uuid: string, envVars: EnvVar[]): Promise<void> {
+    await this.request("PATCH", `/applications/${uuid}/envs/bulk`, {
+      data: envVars,
+    });
   }
 
   // === Health Check ===

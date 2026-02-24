@@ -156,8 +156,9 @@ export async function PATCH(
 
       if (agent.coolifyAppUuid) {
         const coolify = getCoolifyClient();
-        await coolify.updateService(agent.coolifyAppUuid, {
+        await coolify.updateApplication(agent.coolifyAppUuid, {
           name: newSlug,
+          docker_compose_domains: JSON.stringify({ agent: { domain: newDomain } }),
         });
         needsRedeploy = true;
       }
@@ -232,7 +233,7 @@ export async function PATCH(
   if (needsRedeploy && agent.coolifyAppUuid) {
     await rebuildAndUpdateCompose(agentId, { configB64: newConfigB64 });
     const coolify = getCoolifyClient();
-    await coolify.deployService(agent.coolifyAppUuid);
+    await coolify.startApplication(agent.coolifyAppUuid);
   }
 
   return NextResponse.json({ success: true, redeployed: needsRedeploy });

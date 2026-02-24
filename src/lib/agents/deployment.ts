@@ -24,7 +24,6 @@ function buildComposeYaml(opts: {
   sessionB64?: string;
   memoryLimitMb: number;
   cpuLimit: string;
-  domain?: string; // e.g. "https://slug.tokn.deal"
 }): string {
   const lines = [
     "services:",
@@ -34,23 +33,6 @@ function buildComposeYaml(opts: {
     "      - teleton-data:/data",
     "    ports:",
     `      - "${TELETON_WEBUI_PORT}:${TELETON_WEBUI_PORT}"`,
-  ];
-
-  // Add Traefik labels for public domain access
-  if (opts.domain) {
-    const hostname = opts.domain.replace(/^https?:\/\//, "");
-    lines.push(
-      "    labels:",
-      "      - traefik.enable=true",
-      `      - "traefik.http.routers.agent.rule=Host(\`${hostname}\`)"`,
-      "      - traefik.http.routers.agent.entryPoints=https",
-      "      - traefik.http.routers.agent.tls=true",
-      "      - traefik.http.routers.agent.tls.certresolver=letsencrypt",
-      `      - traefik.http.services.agent.loadbalancer.server.port=${TELETON_WEBUI_PORT}`,
-    );
-  }
-
-  lines.push(
     "    environment:",
     "      - TELETON_HOME=/data",
     "      - NODE_ENV=production",
@@ -70,7 +52,7 @@ function buildComposeYaml(opts: {
     `          cpus: '${opts.cpuLimit}'`,
     "volumes:",
     "  teleton-data:",
-  );
+  ];
 
   return lines.join("\n");
 }
@@ -145,11 +127,10 @@ export async function rebuildAndUpdateCompose(
     sessionB64,
     memoryLimitMb: tierConfig.memoryLimitMb,
     cpuLimit: tierConfig.cpuLimit,
-    domain: agent.coolifyDomain || undefined,
   });
 
   const coolify = getCoolifyClient();
-  await coolify.updateService(agent.coolifyAppUuid, {
+  await coolify.updateApplication(agent.coolifyAppUuid, {
     docker_compose_raw: Buffer.from(composeYaml).toString("base64"),
   });
 }
@@ -219,7 +200,7 @@ export async function createAgent(input: CreateAgentInput): Promise<string> {
     sub.length > 0 ? (sub[0].tier as SubscriptionTier) : "basic";
   const tierConfig = SUBSCRIPTION_TIERS[tier];
 
-  // 6. Create Coolify service via Docker Compose (POST /services)
+  // 6. Create Coolify application via Docker Compose
   const coolify = getCoolifyClient();
   const configB64 = Buffer.from(configYaml).toString("base64");
 
@@ -227,10 +208,9 @@ export async function createAgent(input: CreateAgentInput): Promise<string> {
     configB64,
     memoryLimitMb: tierConfig.memoryLimitMb,
     cpuLimit: tierConfig.cpuLimit,
-    domain: agentDomain,
   });
 
-  const coolifyService = await coolify.createService({
+  const coolifyApp = await coolify.createApplication({
     project_uuid: process.env.COOLIFY_PROJECT_UUID!,
     server_uuid: process.env.COOLIFY_SERVER_UUID!,
     environment_name: process.env.COOLIFY_ENVIRONMENT_NAME || "production",
@@ -242,11 +222,18 @@ export async function createAgent(input: CreateAgentInput): Promise<string> {
   // Save Coolify UUID immediately so cleanup works even if later steps fail
   await db
     .update(agents)
-    .set({ coolifyAppUuid: coolifyService.uuid, updatedAt: new Date() })
+    .set({ coolifyAppUuid: coolifyApp.uuid, updatedAt: new Date() })
     .where(eq(agents.id, agent.id));
 
-  // Wait for Coolify to fully index the new service
-  await waitForCoolifyService(coolify, coolifyService.uuid);
+  // Wait for Coolify to fully index the new application
+  await waitForCoolifyApp(coolify, coolifyApp.uuid);
+
+  // Set domain mapping via docker_compose_domains if domain is configured
+  if (agentDomain) {
+    await coolify.updateApplication(coolifyApp.uuid, {
+      docker_compose_domains: JSON.stringify({ agent: { domain: agentDomain } }),
+    });
+  }
 
   // 7. Generate TON wallet
   const wallet = await generateWallet();
@@ -299,15 +286,14 @@ export async function createAgent(input: CreateAgentInput): Promise<string> {
     sessionB64,
     memoryLimitMb: tierConfig.memoryLimitMb,
     cpuLimit: tierConfig.cpuLimit,
-    domain: agentDomain,
   });
-  await coolify.updateService(coolifyService.uuid, {
+  await coolify.updateApplication(coolifyApp.uuid, {
     docker_compose_raw: Buffer.from(finalComposeYaml).toString("base64"),
   });
 
   // 10. Deploy if session is ready
   if (input.telegramSessionString) {
-    await coolify.deployService(coolifyService.uuid);
+    await coolify.startApplication(coolifyApp.uuid);
   }
 
   return agent.id;
@@ -316,10 +302,10 @@ export async function createAgent(input: CreateAgentInput): Promise<string> {
 export async function startAgent(agentId: string): Promise<void> {
   const agent = await getAgentOrThrow(agentId);
   if (!agent.coolifyAppUuid) {
-    throw new Error("Agent has no Coolify service — try recreating it");
+    throw new Error("Agent has no Coolify application — try recreating it");
   }
   const coolify = getCoolifyClient();
-  await coolify.deployService(agent.coolifyAppUuid);
+  await coolify.startApplication(agent.coolifyAppUuid);
   await db
     .update(agents)
     .set({ status: "starting", updatedAt: new Date() })
@@ -329,10 +315,10 @@ export async function startAgent(agentId: string): Promise<void> {
 export async function stopAgent(agentId: string): Promise<void> {
   const agent = await getAgentOrThrow(agentId);
   if (!agent.coolifyAppUuid) {
-    throw new Error("Agent has no Coolify service");
+    throw new Error("Agent has no Coolify application");
   }
   const coolify = getCoolifyClient();
-  await coolify.stopService(agent.coolifyAppUuid);
+  await coolify.stopApplication(agent.coolifyAppUuid);
   await db
     .update(agents)
     .set({ status: "stopped", stoppedAt: new Date(), updatedAt: new Date() })
@@ -342,10 +328,10 @@ export async function stopAgent(agentId: string): Promise<void> {
 export async function restartAgent(agentId: string): Promise<void> {
   const agent = await getAgentOrThrow(agentId);
   if (!agent.coolifyAppUuid) {
-    throw new Error("Agent has no Coolify service");
+    throw new Error("Agent has no Coolify application");
   }
   const coolify = getCoolifyClient();
-  await coolify.restartService(agent.coolifyAppUuid);
+  await coolify.restartApplication(agent.coolifyAppUuid);
   await db
     .update(agents)
     .set({ status: "starting", updatedAt: new Date() })
@@ -355,12 +341,12 @@ export async function restartAgent(agentId: string): Promise<void> {
 export async function redeployAgent(agentId: string): Promise<void> {
   const agent = await getAgentOrThrow(agentId);
   if (!agent.coolifyAppUuid) {
-    throw new Error("Agent has no Coolify service");
+    throw new Error("Agent has no Coolify application");
   }
   // Rebuild compose to ensure env vars are embedded directly
   await rebuildAndUpdateCompose(agentId);
   const coolify = getCoolifyClient();
-  await coolify.deployService(agent.coolifyAppUuid);
+  await coolify.startApplication(agent.coolifyAppUuid);
   await db
     .update(agents)
     .set({ status: "starting", updatedAt: new Date() })
@@ -378,9 +364,9 @@ export async function deleteAgent(agentId: string): Promise<void> {
   if (agent.coolifyAppUuid) {
     const coolify = getCoolifyClient();
     try {
-      await coolify.deleteService(agent.coolifyAppUuid);
+      await coolify.deleteApplication(agent.coolifyAppUuid);
     } catch (err) {
-      console.error(`Failed to delete Coolify service ${agent.coolifyAppUuid}:`, err);
+      console.error(`Failed to delete Coolify application ${agent.coolifyAppUuid}:`, err);
     }
   }
 
@@ -393,21 +379,11 @@ export async function getAgentLogs(
 ): Promise<string> {
   const agent = await getAgentOrThrow(agentId);
   if (!agent.coolifyAppUuid) {
-    throw new Error("Agent has no Coolify service");
+    throw new Error("Agent has no Coolify application");
   }
 
   const coolify = getCoolifyClient();
-  const service = await coolify.getService(agent.coolifyAppUuid);
-
-  // Try getting logs from the first service application
-  if (
-    Array.isArray(service.applications) &&
-    service.applications.length > 0
-  ) {
-    return coolify.getApplicationLogs(service.applications[0].uuid, tail);
-  }
-
-  return `Service ${agent.coolifyAppUuid} (status: ${service.status || "unknown"}) — no application containers found.`;
+  return coolify.getApplicationLogs(agent.coolifyAppUuid, tail);
 }
 
 export async function injectTelegramSession(
@@ -416,7 +392,7 @@ export async function injectTelegramSession(
 ): Promise<void> {
   const agent = await getAgentOrThrow(agentId);
   if (!agent.coolifyAppUuid) {
-    throw new Error("Agent has no Coolify service");
+    throw new Error("Agent has no Coolify application");
   }
 
   // Encrypt session for DB storage
@@ -453,7 +429,7 @@ async function getAgentOrThrow(agentId: string) {
   return results[0];
 }
 
-async function waitForCoolifyService(
+async function waitForCoolifyApp(
   coolify: ReturnType<typeof getCoolifyClient>,
   uuid: string,
   maxRetries = 30,
@@ -461,13 +437,13 @@ async function waitForCoolifyService(
 ): Promise<void> {
   for (let i = 0; i < maxRetries; i++) {
     try {
-      await coolify.getService(uuid);
+      await coolify.getApplication(uuid);
       return;
     } catch (err) {
       if (i === maxRetries - 1) {
         const detail = err instanceof Error ? err.message : String(err);
         throw new Error(
-          `Coolify service ${uuid} not ready after ${maxRetries} retries (${detail})`,
+          `Coolify application ${uuid} not ready after ${maxRetries} retries (${detail})`,
         );
       }
       await new Promise((r) => setTimeout(r, delayMs));

@@ -93,7 +93,6 @@ export interface SyncResult {
   coolifyDomain: string | null;
   coolifyStatus?: string; // raw status from Coolify
   health?: string | null; // parsed health component (healthy/unhealthy)
-  serviceAppUuid?: string; // UUID of the first service application (for logs)
 }
 
 /**
@@ -108,26 +107,15 @@ export async function syncAgentFromCoolify(
 
   try {
     const coolify = getCoolifyClient();
-    const coolifyService = await coolify.getService(agent.coolifyAppUuid);
+    const app = await coolify.getApplication(agent.coolifyAppUuid);
 
-    const rawStatus = coolifyService.status
-      ? String(coolifyService.status)
-      : null;
+    const rawStatus = app.status ? String(app.status) : null;
     const { status: mappedStatus, health, errorDetail } = mapCoolifyStatus(
       rawStatus,
       agent.status,
     );
 
-    const fqdn = coolifyService.fqdn
-      ? String(coolifyService.fqdn)
-      : null;
-
-    // Extract the first service application UUID (for container logs)
-    const serviceAppUuid =
-      Array.isArray(coolifyService.applications) &&
-      coolifyService.applications.length > 0
-        ? coolifyService.applications[0].uuid
-        : undefined;
+    const fqdn = app.fqdn ? String(app.fqdn) : null;
 
     const updates: Record<string, unknown> = {
       lastHealthCheck: new Date(),
@@ -174,7 +162,6 @@ export async function syncAgentFromCoolify(
       coolifyDomain: fqdn || agent.coolifyDomain,
       coolifyStatus: rawStatus || undefined,
       health,
-      serviceAppUuid,
     };
   } catch (err) {
     if (err instanceof CoolifyApiError) {

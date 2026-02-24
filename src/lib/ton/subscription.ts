@@ -140,7 +140,7 @@ async function suspendUserAgents(userId: string): Promise<void> {
   for (const agent of userAgents) {
     if (agent.coolifyAppUuid) {
       try {
-        await coolify.stopService(agent.coolifyAppUuid);
+        await coolify.stopApplication(agent.coolifyAppUuid);
       } catch {
         // Continue even if stop fails
       }

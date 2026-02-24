@@ -60,7 +60,7 @@ export async function POST(
     const { rebuildAndUpdateCompose } = await import("@/lib/agents/deployment");
     await rebuildAndUpdateCompose(agentId, { walletB64 });
     const coolify = getCoolifyClient();
-    await coolify.deployService(agent.coolifyAppUuid);
+    await coolify.startApplication(agent.coolifyAppUuid);
   }
 
   return NextResponse.json({
