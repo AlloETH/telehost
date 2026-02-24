@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         chat_id: chatId,
-        text: `Hey ${name}!\n\nManage your Telehost agents, deploy new bots, and handle billing — all from right here in Telegram.`,
+        text: `Hey ${name}!\n\nManage your Telehost agents, deploy new bots, and handle billing, all from right here in Telegram.`,
         reply_markup: {
           inline_keyboard: [
             [
