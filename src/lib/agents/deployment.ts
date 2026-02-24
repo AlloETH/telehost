@@ -168,7 +168,6 @@ export async function createAgent(input: CreateAgentInput): Promise<string> {
     name: slug,
     domains: agentDomain,
     instant_deploy: false,
-    custom_docker_run_options: `-v /opt/telehost/agents/${slug}:/data`,
     limits_memory: `${tierConfig.memoryLimitMb}M`,
     limits_cpus: tierConfig.cpuLimit,
     health_check_enabled: true,
