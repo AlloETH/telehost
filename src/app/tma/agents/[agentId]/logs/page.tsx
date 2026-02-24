@@ -37,7 +37,7 @@ export default function TMAAgentLogsPage({
         <select
           value={tail}
           onChange={(e) => setTail(Number(e.target.value))}
-          className="rounded-lg border border-[var(--border)] bg-[var(--card)] px-2 py-1 text-sm"
+          className="rounded-lg border border-[var(--border)] bg-[var(--card)] px-3 py-1.5 text-base appearance-none"
         >
           <option value={50}>50 lines</option>
           <option value={100}>100 lines</option>
@@ -45,7 +45,7 @@ export default function TMAAgentLogsPage({
         </select>
       </div>
 
-      <div className="overflow-auto rounded-xl border border-[var(--border)] bg-black p-3 max-h-[calc(100vh-10rem)]">
+      <div className="overflow-auto rounded-xl border border-[var(--border)] bg-black p-3 max-h-[calc(100vh-8rem)] -webkit-overflow-scrolling-touch" style={{ WebkitOverflowScrolling: "touch" }}>
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <div className="h-6 w-6 animate-spin rounded-full border-2 border-[var(--primary)] border-t-transparent" />

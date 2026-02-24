@@ -278,7 +278,7 @@ export default function TMAAgentDetailPage({
       <button
         onClick={doDelete}
         disabled={isBusy}
-        className="w-full flex items-center justify-center gap-2 rounded-xl border border-red-500/30 p-3 text-sm text-red-400 disabled:opacity-50"
+        className="w-full flex items-center justify-center gap-2 rounded-xl border border-red-500/30 p-3.5 text-sm text-red-400 disabled:opacity-50 active:opacity-80 transition-opacity mb-4"
       >
         {actionLoading === "delete" || agent.status === "deleting" ? (
           <Loader2 className="h-4 w-4 animate-spin" />
@@ -312,7 +312,7 @@ function ActionButton({
     <button
       onClick={onClick}
       disabled={disabled}
-      className={`w-full flex items-center justify-center gap-2 rounded-xl p-3 text-sm font-medium disabled:opacity-50 active:scale-[0.98] transition-transform ${className}`}
+      className={`w-full flex items-center justify-center gap-2 rounded-xl p-3.5 text-sm font-medium disabled:opacity-50 active:opacity-80 transition-opacity ${className}`}
     >
       {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : icon}
       {loading ? loadingLabel : label}

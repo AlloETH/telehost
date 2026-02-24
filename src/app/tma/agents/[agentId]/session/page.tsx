@@ -222,7 +222,7 @@ export default function TMASessionSetupPage({
             maxLength={6}
             autoFocus
             inputMode="numeric"
-            className="w-full rounded-xl border border-[var(--border)] bg-[var(--card)] px-4 py-4 text-center text-3xl tracking-[0.5em] font-mono"
+            className="w-full rounded-2xl border border-[var(--border)] bg-[var(--card)] px-4 py-5 text-center text-3xl tracking-[0.5em] font-mono"
           />
         </div>
       )}
@@ -237,7 +237,7 @@ export default function TMASessionSetupPage({
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             autoFocus
-            className="w-full rounded-xl border border-[var(--border)] bg-[var(--card)] px-4 py-3 text-sm"
+            className="w-full rounded-xl border border-[var(--border)] bg-[var(--card)] px-4 py-3.5 text-base"
           />
         </div>
       )}

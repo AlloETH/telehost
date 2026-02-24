@@ -21,22 +21,30 @@ export function BottomNav() {
   }
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-[var(--border)] bg-[var(--background)]/95 backdrop-blur-sm safe-area-pb">
-      <div className="flex items-center justify-around h-16 max-w-lg mx-auto">
+    <nav
+      className="fixed bottom-0 left-0 right-0 z-50 border-t border-[var(--border)]"
+      style={{
+        background: "rgba(var(--background-rgb, 9, 9, 11), 0.92)",
+        backdropFilter: "blur(20px)",
+        WebkitBackdropFilter: "blur(20px)",
+        paddingBottom: "env(safe-area-inset-bottom, 0px)",
+      }}
+    >
+      <div className="flex items-center justify-around h-14 max-w-lg mx-auto">
         {tabs.map((tab) => {
           const active = isActive(tab);
           return (
             <Link
               key={tab.href}
               href={tab.href}
-              className={`flex flex-col items-center gap-1 px-4 py-2 rounded-lg transition-colors ${
+              className={`flex flex-col items-center justify-center gap-0.5 min-w-[64px] min-h-[44px] rounded-xl transition-colors ${
                 active
                   ? "text-[var(--primary)]"
-                  : "text-[var(--muted-foreground)]"
+                  : "text-[var(--muted-foreground)] active:text-[var(--foreground)]"
               }`}
             >
-              <tab.icon className="h-5 w-5" />
-              <span className="text-xs font-medium">{tab.label}</span>
+              <tab.icon className={`h-5 w-5 ${active ? "stroke-[2.5]" : ""}`} />
+              <span className="text-[10px] font-medium">{tab.label}</span>
             </Link>
           );
         })}

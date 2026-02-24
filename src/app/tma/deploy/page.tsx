@@ -424,7 +424,7 @@ export default function TMADeployPage() {
                 const p = LLM_PROVIDERS.find((x) => x.value === e.target.value)!;
                 setForm((prev) => ({ ...prev, provider: p.value, model: p.defaultModel }));
               }}
-              className="w-full rounded-lg border border-[var(--border)] bg-[var(--card)] px-3 py-2.5 text-sm"
+              className="w-full rounded-xl border border-[var(--border)] bg-[var(--card)] px-3 py-3 text-base appearance-none"
             >
               {LLM_PROVIDERS.map((p) => (
                 <option key={p.value} value={p.value}>{p.label}</option>
@@ -437,7 +437,7 @@ export default function TMADeployPage() {
             <select
               value={form.model}
               onChange={(e) => update("model", e.target.value)}
-              className="w-full rounded-lg border border-[var(--border)] bg-[var(--card)] px-3 py-2.5 text-sm"
+              className="w-full rounded-xl border border-[var(--border)] bg-[var(--card)] px-3 py-3 text-base appearance-none"
             >
               {currentProvider.models.map((m) => (
                 <option key={m.value} value={m.value}>{m.label}</option>
@@ -477,14 +477,14 @@ export default function TMADeployPage() {
 
           <div>
             <label className="block text-xs text-[var(--muted-foreground)] mb-1.5">DM Policy</label>
-            <select value={form.dmPolicy} onChange={(e) => update("dmPolicy", e.target.value)} className="w-full rounded-lg border border-[var(--border)] bg-[var(--card)] px-3 py-2.5 text-sm">
+            <select value={form.dmPolicy} onChange={(e) => update("dmPolicy", e.target.value)} className="w-full rounded-xl border border-[var(--border)] bg-[var(--card)] px-3 py-3 text-base appearance-none">
               {DM_POLICIES.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
             </select>
           </div>
 
           <div>
             <label className="block text-xs text-[var(--muted-foreground)] mb-1.5">Group Policy</label>
-            <select value={form.groupPolicy} onChange={(e) => update("groupPolicy", e.target.value)} className="w-full rounded-lg border border-[var(--border)] bg-[var(--card)] px-3 py-2.5 text-sm">
+            <select value={form.groupPolicy} onChange={(e) => update("groupPolicy", e.target.value)} className="w-full rounded-xl border border-[var(--border)] bg-[var(--card)] px-3 py-3 text-base appearance-none">
               {GROUP_POLICIES.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
             </select>
           </div>
@@ -589,7 +589,7 @@ function Field({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full rounded-lg border border-[var(--border)] bg-[var(--card)] px-3 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--primary)]"
+        className="w-full rounded-xl border border-[var(--border)] bg-[var(--card)] px-3 py-3 text-base focus:outline-none focus:ring-1 focus:ring-[var(--primary)]"
       />
     </div>
   );

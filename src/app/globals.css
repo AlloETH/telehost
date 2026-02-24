@@ -24,6 +24,15 @@
 body {
   background: var(--background);
   color: var(--foreground);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Prevent iOS overscroll bounce in TMA */
+.tma-root {
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* Gradient glow effects */
@@ -44,9 +53,19 @@ body {
   background-clip: text;
 }
 
-/* Safe area for TMA bottom nav */
+/* Safe area for TMA */
 .safe-area-pb {
   padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.safe-area-pt {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+/* Prevent iOS zoom on focus for inputs < 16px */
+@supports (-webkit-touch-callout: none) {
+  input, select, textarea {
+    font-size: max(16px, 1em);
+  }
 }
 
 /* Subtle grid background */

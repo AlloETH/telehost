@@ -112,9 +112,9 @@ export function TMAProvider({ children }: { children: ReactNode }) {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="flex flex-col items-center gap-3">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-[var(--primary)] border-t-transparent" />
+      <div className="flex items-center justify-center min-h-screen" style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
+        <div className="flex flex-col items-center gap-4">
+          <div className="h-10 w-10 animate-spin rounded-full border-[3px] border-[var(--primary)] border-t-transparent" />
           <p className="text-sm text-[var(--muted-foreground)]">Loading...</p>
         </div>
       </div>
@@ -123,9 +123,12 @@ export function TMAProvider({ children }: { children: ReactNode }) {
 
   if (error) {
     return (
-      <div className="flex items-center justify-center min-h-screen p-6">
-        <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-6 text-center max-w-sm">
-          <p className="text-lg font-medium mb-2">Unable to load</p>
+      <div className="flex items-center justify-center min-h-screen px-6" style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
+        <div className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-8 text-center max-w-sm w-full">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-red-500/10 mb-4">
+            <span className="text-xl">!</span>
+          </div>
+          <p className="text-lg font-semibold mb-2">Unable to load</p>
           <p className="text-sm text-[var(--muted-foreground)]">{error}</p>
           <p className="text-xs text-[var(--muted-foreground)] mt-4">
             Please open this app from Telegram.
@@ -141,7 +144,7 @@ export function TMAProvider({ children }: { children: ReactNode }) {
         manifestUrl={manifestUrl}
         actionsConfiguration={{ twaReturnUrl: twaReturnUrl as `${string}://${string}` }}
       >
-        <div className="min-h-screen pb-20 safe-area-pb">
+        <div className="tma-root min-h-screen" style={{ paddingBottom: "calc(4.5rem + env(safe-area-inset-bottom, 0px))" }}>
           {children}
         </div>
         <BottomNav />

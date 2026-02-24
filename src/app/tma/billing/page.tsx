@@ -135,7 +135,7 @@ export default function TMABillingPage() {
           </p>
           <button
             onClick={() => tonConnectUI.openModal()}
-            className="w-full rounded-lg bg-[var(--primary)] px-4 py-2.5 text-sm font-medium text-white"
+            className="w-full rounded-xl bg-[var(--primary)] px-4 py-3 text-sm font-semibold text-white active:opacity-80 transition-opacity"
           >
             Connect TON Wallet
           </button>
@@ -204,7 +204,7 @@ export default function TMABillingPage() {
               <button
                 onClick={() => handleSubscribe(key)}
                 disabled={!!paying || !tonAddress}
-                className="w-full rounded-lg bg-[var(--primary)] px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50 active:scale-[0.98] transition-transform"
+                className="w-full rounded-xl bg-[var(--primary)] px-4 py-3 text-sm font-semibold text-white disabled:opacity-50 active:opacity-80 transition-opacity"
               >
                 {paying === key ? "Sending..." :
                  isCurrent && subscription?.status === "active" ? "Renew" :

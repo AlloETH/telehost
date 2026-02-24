@@ -20,7 +20,7 @@ interface BillingStatus {
 }
 
 export default function TMAAgentsPage() {
-  const { walletAddress } = useTMA();
+  const { walletAddress, telegramUser } = useTMA();
   const router = useRouter();
   const haptic = useTelegramHaptic();
   const [agents, setAgents] = useState<Agent[]>([]);
@@ -51,21 +51,19 @@ export default function TMAAgentsPage() {
   }
 
   return (
-    <div className="px-4 pt-4">
+    <div className="px-4 pt-2">
+      {/* Greeting */}
+      {telegramUser && (
+        <p className="text-sm text-[var(--muted-foreground)] mb-3">
+          Hi, {telegramUser.firstName}
+        </p>
+      )}
+
       {/* Stats row */}
       <div className="grid grid-cols-3 gap-2 mb-4">
-        <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-3 text-center">
-          <p className="text-xl font-bold">{agents.length}</p>
-          <p className="text-xs text-[var(--muted-foreground)]">Total</p>
-        </div>
-        <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-3 text-center">
-          <p className="text-xl font-bold text-green-400">{runningCount}</p>
-          <p className="text-xs text-[var(--muted-foreground)]">Running</p>
-        </div>
-        <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-3 text-center">
-          <p className="text-xl font-bold capitalize">{billing?.tier || "Free"}</p>
-          <p className="text-xs text-[var(--muted-foreground)]">Plan</p>
-        </div>
+        <StatCard value={agents.length} label="Total" />
+        <StatCard value={runningCount} label="Running" valueColor="text-green-400" />
+        <StatCard value={billing?.tier || "Free"} label="Plan" capitalize />
       </div>
 
       {/* Wallet prompt */}
@@ -75,7 +73,7 @@ export default function TMAAgentsPage() {
             haptic.impact("light");
             router.push("/tma/billing");
           }}
-          className="mb-4 w-full flex items-center gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3"
+          className="mb-4 w-full flex items-center gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3.5 active:opacity-80 transition-opacity"
         >
           <Wallet className="h-5 w-5 text-amber-400 shrink-0" />
           <div className="flex-1 text-left">
@@ -88,11 +86,11 @@ export default function TMAAgentsPage() {
 
       {/* Agent list */}
       {agents.length === 0 ? (
-        <div className="mt-8 rounded-xl border border-dashed border-[var(--border)] p-12 text-center">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--primary)]/10 text-[var(--primary)]">
-            <Bot className="h-6 w-6" />
+        <div className="mt-6 rounded-2xl border border-dashed border-[var(--border)] p-10 text-center">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--primary)]/10 text-[var(--primary)]">
+            <Bot className="h-7 w-7" />
           </div>
-          <p className="mt-4 font-medium">No agents yet</p>
+          <p className="mt-4 text-base font-semibold">No agents yet</p>
           <p className="mt-1 text-sm text-[var(--muted-foreground)]">
             Deploy your first AI agent
           </p>
@@ -101,7 +99,7 @@ export default function TMAAgentsPage() {
               haptic.impact("medium");
               router.push("/tma/deploy");
             }}
-            className="mt-4 rounded-lg bg-[var(--primary)] px-6 py-2.5 text-sm font-medium text-white"
+            className="mt-5 rounded-xl bg-[var(--primary)] px-8 py-3 text-sm font-semibold text-white active:opacity-80 transition-opacity"
           >
             Deploy Agent
           </button>
@@ -115,15 +113,15 @@ export default function TMAAgentsPage() {
                 haptic.selection();
                 router.push(`/tma/agents/${agent.id}`);
               }}
-              className="w-full flex items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--card)] p-4 text-left active:scale-[0.98] transition-transform"
+              className="w-full flex items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--card)] p-4 text-left active:opacity-80 transition-opacity"
             >
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[var(--accent)] text-sm font-semibold shrink-0">
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[var(--accent)] text-sm font-bold shrink-0">
                 {agent.name.charAt(0).toUpperCase()}
               </div>
               <div className="flex-1 min-w-0">
                 <h3 className="font-medium truncate">{agent.name}</h3>
-                <p className="text-xs text-[var(--muted-foreground)]">
-                  {new Date(agent.createdAt).toLocaleDateString()}
+                <p className="text-xs text-[var(--muted-foreground)] mt-0.5">
+                  {agent.status.replace(/_/g, " ")}
                 </p>
               </div>
               <div className="flex items-center gap-2 shrink-0">
@@ -133,11 +131,26 @@ export default function TMAAgentsPage() {
                   </span>
                 )}
                 <StatusDot status={agent.status} />
+                <ChevronRight className="h-4 w-4 text-[var(--muted-foreground)]" />
               </div>
             </button>
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function StatCard({ value, label, valueColor, capitalize }: {
+  value: string | number;
+  label: string;
+  valueColor?: string;
+  capitalize?: boolean;
+}) {
+  return (
+    <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-3 text-center">
+      <p className={`text-xl font-bold ${valueColor || ""} ${capitalize ? "capitalize" : ""}`}>{value}</p>
+      <p className="text-[10px] text-[var(--muted-foreground)] mt-0.5">{label}</p>
     </div>
   );
 }
