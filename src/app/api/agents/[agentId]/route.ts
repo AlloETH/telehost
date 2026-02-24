@@ -60,6 +60,7 @@ export async function GET(
     if (synced.coolifyDomain) agent.coolifyDomain = synced.coolifyDomain;
     if (synced.coolifyStatus) agent.coolifyStatus = synced.coolifyStatus;
     if (synced.health !== undefined) agent.healthStatus = synced.health;
+    if (synced.lastError !== undefined) agent.lastError = synced.lastError;
   }
 
   // Decrypt config to expose editable settings

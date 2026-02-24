@@ -158,7 +158,7 @@ class CoolifyClient {
   ): Promise<CoolifyDeployment | null> {
     const data = await this.request<CoolifyDeployment[]>(
       "GET",
-      `/deployments/applications/${appUuid}?skip=0&take=1`,
+      `/deployments/app/${appUuid}?skip=0&take=1`,
     );
     if (Array.isArray(data) && data.length > 0) return data[0];
     return null;

@@ -46,12 +46,8 @@ function mapCoolifyStatus(
 
   // Map Coolify container states to our states
   if (containerStatus === "exited" || containerStatus === "stopped") {
-    return {
-      status: "stopped",
-      health,
-      errorDetail:
-        health === "unhealthy" ? "Container exited with unhealthy status" : null,
-    };
+    // Stopped containers naturally fail health checks - that's not an error
+    return { status: "stopped", health, errorDetail: null };
   }
 
   if (containerStatus === "restarting" || containerStatus === "starting") {
@@ -86,6 +82,7 @@ interface AgentForSync {
   status: string;
   coolifyAppUuid: string | null;
   coolifyDomain: string | null;
+  lastError?: string | null;
 }
 
 export interface SyncResult {
@@ -94,6 +91,7 @@ export interface SyncResult {
   coolifyStatus?: string; // raw status from Coolify
   health?: string | null; // parsed health component (healthy/unhealthy)
   deploymentStatus?: string; // queued | in_progress | finished | failed
+  lastError?: string | null; // updated error detail (null = cleared)
 }
 
 /**
@@ -132,6 +130,12 @@ export async function syncAgentFromCoolify(
         rawStatus,
         agent.status,
       ));
+
+      // A failed deployment with a non-running container is an error
+      if (deploymentStatus === "failed" && mappedStatus !== "running") {
+        mappedStatus = "error";
+        errorDetail = "Deployment failed";
+      }
     }
 
     const fqdn = app.fqdn ? String(app.fqdn) : null;
@@ -152,15 +156,12 @@ export async function syncAgentFromCoolify(
       changed = true;
     }
 
-    // Update lastError based on health
+    // Update lastError: set new errors, clear stale ones
     if (errorDetail) {
       updates.lastError = errorDetail;
       changed = true;
-    } else if (
-      (mappedStatus === "running" || mappedStatus === "deploying") &&
-      agent.status !== "running"
-    ) {
-      // Clear error when transitioning to running or deploying
+    } else if (agent.lastError) {
+      // No active error but a stale one exists - clear it
       updates.lastError = null;
       changed = true;
     }
@@ -181,6 +182,7 @@ export async function syncAgentFromCoolify(
       coolifyStatus: rawStatus || undefined,
       health,
       deploymentStatus: deploymentStatus || undefined,
+      lastError: errorDetail,
     };
   } catch (err) {
     if (err instanceof CoolifyApiError) {
