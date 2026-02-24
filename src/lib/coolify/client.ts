@@ -195,12 +195,12 @@ class CoolifyClient {
           return;
         }
       } catch {
-        // App may already be gone — treat as stopped
+        // App may already be gone - treat as stopped
         return;
       }
       await new Promise((r) => setTimeout(r, 2000));
     }
-    // Timed out — proceed anyway, periodic sync should have saved recent data
+    // Timed out - proceed anyway, periodic sync should have saved recent data
   }
 
   // === Health Check ===

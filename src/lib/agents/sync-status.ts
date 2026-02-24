@@ -62,7 +62,7 @@ function mapCoolifyStatus(
     return {
       status: "error",
       health: health || "degraded",
-      errorDetail: "Service is degraded — one or more containers failed",
+      errorDetail: "Service is degraded - one or more containers failed",
     };
   }
 
@@ -74,7 +74,7 @@ function mapCoolifyStatus(
     };
   }
 
-  // Unrecognized status — keep current
+  // Unrecognized status - keep current
   console.log(
     `[sync] Unknown Coolify status: "${coolifyStatus}" for agent in state "${currentDbStatus}"`,
   );

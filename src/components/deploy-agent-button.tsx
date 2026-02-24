@@ -50,12 +50,12 @@ export function DeployAgentButton({
 
   const handleClick = useCallback(async () => {
     if (wallet) {
-      // Already connected — check session and navigate
+      // Already connected - check session and navigate
       const res = await fetch("/api/auth/session");
       if (res.ok) {
         window.location.href = href;
       } else {
-        // Wallet connected but no session — re-auth
+        // Wallet connected but no session - re-auth
         pendingRedirect.current = href;
         const payloadRes = await fetch("/api/auth/ton-proof/payload");
         const { payload } = await payloadRes.json();
@@ -69,7 +69,7 @@ export function DeployAgentButton({
       return;
     }
 
-    // Not connected — trigger wallet connect, then redirect after auth
+    // Not connected - trigger wallet connect, then redirect after auth
     pendingRedirect.current = href;
     const res = await fetch("/api/auth/ton-proof/payload");
     const { payload } = await res.json();

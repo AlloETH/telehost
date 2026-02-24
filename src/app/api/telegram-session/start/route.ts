@@ -9,8 +9,8 @@ import { parse as parseYaml } from "yaml";
 import { z } from "zod";
 
 // Two modes:
-// 1. Wizard mode: { apiId, apiHash, phone } — no agent exists yet
-// 2. Session page mode: { agentId } — reads credentials from stored config
+// 1. Wizard mode: { apiId, apiHash, phone } - no agent exists yet
+// 2. Session page mode: { agentId } - reads credentials from stored config
 const wizardSchema = z.object({
   apiId: z.number().int().positive(),
   apiHash: z.string().min(1),
@@ -97,7 +97,7 @@ export async function POST(req: NextRequest) {
 
   const sessionKey = randomUUID();
 
-  // startSession is now synchronous — fires off auth in background
+  // startSession is now synchronous - fires off auth in background
   const result = startSession(
     sessionKey,
     apiId,

@@ -33,7 +33,7 @@ function getHmacSecret(): string {
 /**
  * Generate a self-signed payload: 16-byte nonce + 4-byte timestamp + 12-byte HMAC.
  * Total = 32 bytes = 64 hex chars (same format as before).
- * This is stateless — no in-memory store needed.
+ * This is stateless - no in-memory store needed.
  */
 export function generatePayload(): string {
   const nonce = randomBytes(16).toString("hex"); // 32 hex chars
@@ -97,12 +97,12 @@ export async function verifyTonProof(
     return { valid: false, reason: `timestamp_expired (now=${now}, proof=${proof.timestamp})` };
   }
 
-  // 3. Verify the domain (skip in development — wallet caches manifest domain)
+  // 3. Verify the domain (skip in development - wallet caches manifest domain)
   if (process.env.NODE_ENV !== "development" && proof.domain.value !== appDomain) {
     return { valid: false, reason: `domain_mismatch (proof="${proof.domain.value}", expected="${appDomain}")` };
   }
 
-  // 4. Get the public key — prefer the wallet-provided key, fall back to stateInit extraction
+  // 4. Get the public key - prefer the wallet-provided key, fall back to stateInit extraction
   let publicKey: Uint8Array | null = null;
 
   if (walletInfo.publicKey) {

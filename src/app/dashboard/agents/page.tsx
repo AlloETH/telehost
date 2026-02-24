@@ -63,6 +63,9 @@ export default function AgentsPage() {
           >
             Deploy Your First Agent
           </Link>
+          <p className="mt-3 text-xs text-[var(--muted-foreground)]">
+            Free 1-hour trial for 1 agent - no payment required
+          </p>
         </div>
       ) : (
         <div className="mt-6 space-y-2">

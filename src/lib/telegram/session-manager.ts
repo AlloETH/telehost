@@ -24,7 +24,7 @@ interface PendingSession {
   createdAt: number;
 }
 
-// In-memory map — GramJS clients hold live TCP connections and can't be serialized
+// In-memory map - GramJS clients hold live TCP connections and can't be serialized
 // Stored on globalThis to survive Next.js hot-reloads in dev mode
 const globalForTg = globalThis as unknown as {
   __telegramSessions?: Map<string, PendingSession>;
@@ -55,7 +55,7 @@ function ensureCleanupRunning() {
 }
 
 /**
- * Start a Telegram auth session. Returns immediately —
+ * Start a Telegram auth session. Returns immediately -
  * the auth (including DC migration) runs in the background.
  * Frontend should poll getSessionStatus() until status changes
  * from "connecting" to "awaiting_code".
@@ -110,7 +110,7 @@ export function startSession(
   pendingSessions.set(sessionKey, pending);
   ensureCleanupRunning();
 
-  // Start auth entirely in background — handles DC migration transparently
+  // Start auth entirely in background - handles DC migration transparently
   client
     .start({
       phoneNumber: phone,
@@ -128,6 +128,9 @@ export function startSession(
         }),
       onError: (err: Error) => {
         console.error("[TG Session] Auth error:", err.message);
+        // TIMEOUT errors are transient connection errors during DC migration.
+        // GramJS handles reconnection internally, so don't treat them as fatal.
+        if (err.message === "TIMEOUT") return;
         pending.status = "error";
         pending.error = err.message;
       },
@@ -143,7 +146,7 @@ export function startSession(
       pending.error = err.message;
     });
 
-  // Return immediately — frontend will poll for status
+  // Return immediately - frontend will poll for status
   return { status: "connecting" };
 }
 

@@ -32,7 +32,7 @@ export function TonConnectAuthButton() {
     await tonConnectUI.openModal();
   }, [tonConnectUI]);
 
-  // When wallet connects with proof, verify it — but only for fresh connections
+  // When wallet connects with proof, verify it - but only for fresh connections
   useEffect(() => {
     if (!wallet?.connectItems?.tonProof || isAuthenticating) return;
     if (!freshConnect.current) {

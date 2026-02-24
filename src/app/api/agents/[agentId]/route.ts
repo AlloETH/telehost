@@ -82,7 +82,7 @@ export async function GET(
       tonapiKey: agentSection.tonapi_key,
     };
   } catch {
-    // Config decryption failed — don't expose config
+    // Config decryption failed - don't expose config
   }
 
   return NextResponse.json({ agent });

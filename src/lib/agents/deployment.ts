@@ -122,6 +122,21 @@ export async function createAgent(input: CreateAgentInput): Promise<string> {
 
   const hasActiveSubscription = sub.length > 0;
 
+  // Enforce trial limit: 1 free trial agent per account
+  if (!hasActiveSubscription) {
+    const existingAgents = await db
+      .select({ id: agents.id })
+      .from(agents)
+      .where(eq(agents.userId, userId))
+      .limit(1);
+
+    if (existingAgents.length > 0) {
+      throw new Error(
+        "Free trial is limited to 1 agent. Subscribe to deploy more.",
+      );
+    }
+  }
+
   // 2. Generate slug and check uniqueness
   const slug = nameToSlug(name);
   if (!slug) {
@@ -271,7 +286,7 @@ export async function createAgent(input: CreateAgentInput): Promise<string> {
 export async function startAgent(agentId: string): Promise<void> {
   const agent = await getAgentOrThrow(agentId);
   if (!agent.coolifyAppUuid) {
-    throw new Error("Agent has no Coolify application — try recreating it");
+    throw new Error("Agent has no Coolify application - try recreating it");
   }
   const coolify = getCoolifyClient();
   await coolify.startApplication(agent.coolifyAppUuid);

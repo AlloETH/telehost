@@ -930,7 +930,7 @@ function TrialBanner({ trialEndsAt, status }: { trialEndsAt: string; status: str
       <Timer className="h-5 w-5 text-amber-400 shrink-0" />
       <div className="flex-1">
         <p className="font-medium text-amber-400">
-          Free trial — {timeStr} remaining
+          Free trial - {timeStr} remaining
         </p>
         <p className="mt-0.5 text-sm text-[var(--muted-foreground)]">
           Your agent will stop when the trial ends. Subscribe to keep it running.

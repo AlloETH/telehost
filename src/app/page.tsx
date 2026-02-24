@@ -57,8 +57,18 @@ export default function Home() {
           <span className="text-lg font-bold tracking-tight">Telehost</span>
         </div>
         <nav className="hidden items-center gap-6 md:flex">
-          <a href="#features" className="text-sm text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors">Features</a>
-          <a href="#pricing" className="text-sm text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors">Pricing</a>
+          <a
+            href="#features"
+            className="text-sm text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
+          >
+            Features
+          </a>
+          <a
+            href="#pricing"
+            className="text-sm text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
+          >
+            Pricing
+          </a>
           <TonConnectAuthButton />
         </nav>
         <div className="md:hidden">
@@ -79,20 +89,25 @@ export default function Home() {
             <span className="gradient-text">Telegram + TON</span>
           </h2>
           <p className="mx-auto mt-6 max-w-xl text-lg leading-relaxed text-[var(--muted-foreground)]">
-            Launch autonomous AI agents that manage Telegram conversations, trade on DEXes, and interact with TON blockchain. All with one click.
+            Launch autonomous AI agents that manage Telegram conversations,
+            trade on DEXes, and interact with TON blockchain. All with one
+            click.
           </p>
-          <div className="mt-10 flex items-center justify-center gap-4">
-            <DeployAgentButton
-              className="rounded-lg bg-[var(--primary)] px-6 py-3 text-sm font-medium text-white hover:brightness-110 transition-all"
-            >
-              Deploy Your Agent
-            </DeployAgentButton>
-            <a
-              href="#features"
-              className="rounded-lg border border-[var(--border)] px-6 py-3 text-sm text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] transition-colors"
-            >
-              Learn More
-            </a>
+          <div className="mt-10 flex flex-col items-center gap-3">
+            <div className="flex items-center gap-4">
+              <DeployAgentButton className="rounded-lg bg-[var(--primary)] px-6 py-3 text-sm font-medium text-white hover:brightness-110 transition-all">
+                Deploy Your Agent
+              </DeployAgentButton>
+              <a
+                href="#features"
+                className="rounded-lg border border-[var(--border)] px-6 py-3 text-sm text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] transition-colors"
+              >
+                Learn More
+              </a>
+            </div>
+            <p className="text-sm text-[var(--muted-foreground)]">
+              Free 1-hour trial - no payment required
+            </p>
           </div>
         </div>
       </section>
@@ -100,12 +115,15 @@ export default function Home() {
       {/* Features */}
       <section id="features" className="mx-auto max-w-5xl px-6 py-24">
         <div className="text-center">
-          <p className="text-sm font-medium uppercase tracking-widest text-[var(--primary)]">Features</p>
+          <p className="text-sm font-medium uppercase tracking-widest text-[var(--primary)]">
+            Features
+          </p>
           <h3 className="mt-3 text-3xl font-bold tracking-tight">
             Everything you need to run AI agents
           </h3>
           <p className="mx-auto mt-4 max-w-lg text-[var(--muted-foreground)]">
-            From deployment to monitoring, we handle the infrastructure so you can focus on what your agent does.
+            From deployment to monitoring, we handle the infrastructure so you
+            can focus on what your agent does.
           </p>
         </div>
         <div className="mt-16 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -127,16 +145,24 @@ export default function Home() {
       </section>
 
       {/* Pricing */}
-      <section id="pricing" className="border-t border-[var(--border)] bg-[var(--card)]/30">
+      <section
+        id="pricing"
+        className="border-t border-[var(--border)] bg-[var(--card)]/30"
+      >
         <div className="mx-auto max-w-5xl px-6 py-24">
           <div className="text-center">
-            <p className="text-sm font-medium uppercase tracking-widest text-[var(--primary)]">Pricing</p>
+            <p className="text-sm font-medium uppercase tracking-widest text-[var(--primary)]">
+              Pricing
+            </p>
             <h3 className="mt-3 text-3xl font-bold tracking-tight">
               Simple, transparent pricing
             </h3>
             <p className="mx-auto mt-4 max-w-lg text-[var(--muted-foreground)]">
               Pay with TON. No credit cards, no KYC. Cancel anytime.
             </p>
+            <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-amber-500/30 bg-amber-500/5 px-4 py-1.5 text-sm text-amber-400">
+              Try free for 1 hour - 1 agent, no payment needed
+            </div>
           </div>
           <div className="mt-16 grid grid-cols-1 gap-6 md:grid-cols-3">
             {(
@@ -163,7 +189,9 @@ export default function Home() {
                   <h4 className="text-lg font-semibold">{tier.name}</h4>
                   <div className="mt-4">
                     <span className="text-4xl font-bold">{tier.priceTon}</span>
-                    <span className="ml-1 text-[var(--muted-foreground)]">TON/mo</span>
+                    <span className="ml-1 text-[var(--muted-foreground)]">
+                      TON/mo
+                    </span>
                   </div>
                   <ul className="mt-6 space-y-3 text-sm">
                     <li className="flex items-center gap-2 text-[var(--muted-foreground)]">

@@ -122,7 +122,7 @@ export const agents = pgTable(
       .notNull()
       .default("none"),
 
-    // WebUI auth token (stored plain — not sensitive like API keys)
+    // WebUI auth token (stored plain - not sensitive like API keys)
     webuiAuthToken: varchar("webui_auth_token", { length: 100 }),
 
     // TON wallet

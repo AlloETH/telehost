@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, use } from "react";
 import Link from "next/link";
+import { CircleCheck } from "lucide-react";
 
 type Step = "connecting" | "code" | "2fa" | "success" | "error";
 
@@ -265,7 +266,7 @@ export default function SessionSetupPage({
       {step === "success" && (
         <div className="mt-6 text-center">
           <div className="inline-flex h-16 w-16 items-center justify-center rounded-full bg-green-500/20">
-            <span className="text-3xl text-green-400">&#10003;</span>
+            <CircleCheck className="h-8 w-8 text-green-400" />
           </div>
           <h2 className="mt-4 text-xl font-bold">Session Activated</h2>
           <p className="mt-2 text-[var(--muted-foreground)]">
