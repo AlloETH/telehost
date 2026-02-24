@@ -56,11 +56,13 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(new URL("/", req.url));
   }
 
-  // Attach user info to headers for downstream use
-  const response = NextResponse.next();
-  response.headers.set("x-user-id", session.userId);
-  response.headers.set("x-wallet-address", session.walletAddress);
-  return response;
+  // Attach user info to request headers for downstream API routes
+  const requestHeaders = new Headers(req.headers);
+  requestHeaders.set("x-user-id", session.userId);
+  requestHeaders.set("x-wallet-address", session.walletAddress);
+  return NextResponse.next({
+    request: { headers: requestHeaders },
+  });
 }
 
 export const config = {
