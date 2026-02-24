@@ -1,5 +1,6 @@
 FROM ghcr.io/tonresistor/teleton-agent:latest
 USER root
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
 RUN mkdir -p /data && chmod 777 /data
 USER node
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \

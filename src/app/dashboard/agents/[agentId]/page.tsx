@@ -64,7 +64,7 @@ interface Agent {
   config?: AgentConfig;
 }
 
-const TRANSITIONAL_STATES = ["provisioning", "starting", "deleting"];
+const TRANSITIONAL_STATES = ["provisioning", "starting", "deploying", "deleting"];
 
 export default function AgentDetailPage({
   params,
@@ -170,7 +170,9 @@ export default function AgentDetailPage({
                   ? "Provisioning..."
                   : agent.status === "starting"
                     ? "Starting..."
-                    : "Processing..."}
+                    : agent.status === "deploying"
+                      ? "Deployment in progress..."
+                      : "Processing..."}
               </p>
               <p className="mt-0.5 text-sm text-[var(--muted-foreground)]">
                 This may take a minute. Status updates automatically.
@@ -216,7 +218,7 @@ export default function AgentDetailPage({
 
       {/* Controls */}
       <div className="mt-6 flex flex-wrap gap-2">
-        {!["running", "starting", "deleting", "provisioning"].includes(agent.status) && (
+        {!["running", "starting", "deploying", "deleting", "provisioning"].includes(agent.status) && (
           <button
             onClick={() => doAction("start")}
             disabled={!!actionLoading}
@@ -879,6 +881,7 @@ function StatusBadge({ status }: { status: string }) {
     running: { bg: "bg-green-500/20 text-green-400", dot: "bg-green-400" },
     stopped: { bg: "bg-gray-500/20 text-gray-400", dot: "bg-gray-400" },
     starting: { bg: "bg-blue-500/20 text-blue-400", dot: "bg-blue-400" },
+    deploying: { bg: "bg-cyan-500/20 text-cyan-400", dot: "bg-cyan-400" },
     error: { bg: "bg-red-500/20 text-red-400", dot: "bg-red-400" },
     provisioning: { bg: "bg-yellow-500/20 text-yellow-400", dot: "bg-yellow-400" },
     awaiting_session: { bg: "bg-purple-500/20 text-purple-400", dot: "bg-purple-400" },
@@ -890,7 +893,7 @@ function StatusBadge({ status }: { status: string }) {
 
   return (
     <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-medium ${c.bg}`}>
-      <span className={`inline-block h-2 w-2 rounded-full ${c.dot} ${status === "running" ? "animate-pulse" : ""}`} />
+      <span className={`inline-block h-2 w-2 rounded-full ${c.dot} ${status === "running" || status === "deploying" ? "animate-pulse" : ""}`} />
       {status.replace(/_/g, " ")}
     </span>
   );

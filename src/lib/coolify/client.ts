@@ -49,6 +49,15 @@ export interface CoolifyApplication {
   [key: string]: unknown;
 }
 
+export interface CoolifyDeployment {
+  deployment_uuid: string;
+  status: string; // queued | in_progress | finished | failed | cancelled-by-user
+  created_at: string;
+  updated_at: string;
+  finished_at: string | null;
+  [key: string]: unknown;
+}
+
 class CoolifyClient {
   private baseUrl: string;
   private token: string;
@@ -140,6 +149,19 @@ class CoolifyClient {
     );
     if (typeof data === "string") return data;
     return data.logs || "";
+  }
+
+  // === Deployments ===
+
+  async getLatestDeployment(
+    appUuid: string,
+  ): Promise<CoolifyDeployment | null> {
+    const data = await this.request<CoolifyDeployment[]>(
+      "GET",
+      `/deployments/applications/${appUuid}?skip=0&take=1`,
+    );
+    if (Array.isArray(data) && data.length > 0) return data[0];
+    return null;
   }
 
   // === Environment Variables ===

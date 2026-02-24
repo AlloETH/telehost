@@ -93,6 +93,7 @@ export interface SyncResult {
   coolifyDomain: string | null;
   coolifyStatus?: string; // raw status from Coolify
   health?: string | null; // parsed health component (healthy/unhealthy)
+  deploymentStatus?: string; // queued | in_progress | finished | failed
 }
 
 /**
@@ -107,13 +108,31 @@ export async function syncAgentFromCoolify(
 
   try {
     const coolify = getCoolifyClient();
-    const app = await coolify.getApplication(agent.coolifyAppUuid);
+    const [app, deployment] = await Promise.all([
+      coolify.getApplication(agent.coolifyAppUuid),
+      coolify.getLatestDeployment(agent.coolifyAppUuid).catch(() => null),
+    ]);
 
     const rawStatus = app.status ? String(app.status) : null;
-    const { status: mappedStatus, health, errorDetail } = mapCoolifyStatus(
-      rawStatus,
-      agent.status,
-    );
+    const deploymentStatus = deployment?.status || null;
+    const isDeploying =
+      deploymentStatus === "queued" || deploymentStatus === "in_progress";
+
+    let mappedStatus: string;
+    let health: string | null;
+    let errorDetail: string | null;
+
+    if (isDeploying) {
+      // Deployment in progress takes priority over container status
+      mappedStatus = "deploying";
+      health = null;
+      errorDetail = null;
+    } else {
+      ({ status: mappedStatus, health, errorDetail } = mapCoolifyStatus(
+        rawStatus,
+        agent.status,
+      ));
+    }
 
     const fqdn = app.fqdn ? String(app.fqdn) : null;
 
@@ -138,11 +157,10 @@ export async function syncAgentFromCoolify(
       updates.lastError = errorDetail;
       changed = true;
     } else if (
-      mappedStatus === "running" &&
-      health === "healthy" &&
+      (mappedStatus === "running" || mappedStatus === "deploying") &&
       agent.status !== "running"
     ) {
-      // Clear error when transitioning to healthy running state
+      // Clear error when transitioning to running or deploying
       updates.lastError = null;
       changed = true;
     }
@@ -162,6 +180,7 @@ export async function syncAgentFromCoolify(
       coolifyDomain: fqdn || agent.coolifyDomain,
       coolifyStatus: rawStatus || undefined,
       health,
+      deploymentStatus: deploymentStatus || undefined,
     };
   } catch (err) {
     if (err instanceof CoolifyApiError) {
