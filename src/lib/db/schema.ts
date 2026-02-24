@@ -128,6 +128,9 @@ export const agents = pgTable(
     walletMnemonicIv: varchar("wallet_mnemonic_iv", { length: 64 }),
     walletMnemonicTag: varchar("wallet_mnemonic_tag", { length: 128 }),
 
+    // Workspace archive (base64-encoded tar.gz, synced from container)
+    workspaceArchive: text("workspace_archive"),
+
     // Metadata
     lastHealthCheck: timestamp("last_health_check"),
     lastError: text("last_error"),

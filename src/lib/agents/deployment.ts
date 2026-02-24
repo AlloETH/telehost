@@ -19,16 +19,22 @@ import { nameToSlug } from "@/lib/agents/slug";
 
 // Build env vars array for Coolify bulk endpoint.
 function buildEnvVars(opts: {
+  agentId: string;
+  syncToken: string;
   configB64?: string;
   walletB64?: string;
   sessionB64?: string;
 }): EnvVar[] {
+  const syncUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "";
   return [
     { key: "TELETON_HOME", value: "/data", is_build_time: false },
     { key: "NODE_ENV", value: "production", is_build_time: false },
     { key: "TELETON_CONFIG_B64", value: opts.configB64 || "", is_build_time: false },
     { key: "TELETON_SESSION_B64", value: opts.sessionB64 || "", is_build_time: false },
     { key: "TELETON_WALLET_B64", value: opts.walletB64 || "", is_build_time: false },
+    { key: "TELEHOST_SYNC_URL", value: syncUrl, is_build_time: false },
+    { key: "TELEHOST_AGENT_ID", value: opts.agentId, is_build_time: false },
+    { key: "TELEHOST_SYNC_TOKEN", value: opts.syncToken, is_build_time: false },
   ];
 }
 
@@ -84,7 +90,13 @@ export async function updateAgentEnvVars(
     sessionB64 = Buffer.from(session).toString("base64");
   }
 
-  const envVars = buildEnvVars({ configB64, walletB64, sessionB64 });
+  const envVars = buildEnvVars({
+    agentId: agent.id,
+    syncToken: agent.webuiAuthToken || "",
+    configB64,
+    walletB64,
+    sessionB64,
+  });
   const coolify = getCoolifyClient();
   await coolify.bulkSetEnvVars(agent.coolifyAppUuid, envVars);
 }
@@ -234,7 +246,13 @@ export async function createAgent(input: CreateAgentInput): Promise<string> {
 
   // 9. Set all env vars on the Coolify application
   const configB64 = Buffer.from(configYaml).toString("base64");
-  const envVars = buildEnvVars({ configB64, walletB64, sessionB64 });
+  const envVars = buildEnvVars({
+    agentId: agent.id,
+    syncToken: authToken,
+    configB64,
+    walletB64,
+    sessionB64,
+  });
   await coolify.bulkSetEnvVars(coolifyApp.uuid, envVars);
 
   // 10. Deploy if session is ready

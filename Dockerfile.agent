@@ -2,8 +2,10 @@ FROM ghcr.io/tonresistor/teleton-agent:latest
 USER root
 RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
 RUN mkdir -p /data && chmod 777 /data
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 USER node
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
   CMD node -e "fetch('http://localhost:7777/').then(r=>{process.exit(r.status<500?0:1)}).catch(()=>process.exit(1))"
 ENTRYPOINT []
-CMD ["sh", "-c", "if [ -n \"$TELETON_CONFIG_B64\" ]; then echo \"$TELETON_CONFIG_B64\" | base64 -d > /data/config.yaml; fi && if [ -n \"$TELETON_SESSION_B64\" ]; then echo \"$TELETON_SESSION_B64\" | base64 -d > /data/telegram_session.txt; fi && if [ -n \"$TELETON_WALLET_B64\" ]; then echo \"$TELETON_WALLET_B64\" | base64 -d > /data/wallet.json && chmod 600 /data/wallet.json; fi && mkdir -p /data/workspace && exec node dist/cli/index.js start"]
+CMD ["/entrypoint.sh"]
