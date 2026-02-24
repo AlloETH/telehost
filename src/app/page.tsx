@@ -1,6 +1,6 @@
 import { TonConnectAuthButton } from "@/components/auth/ton-connect-button";
+import { DeployAgentButton } from "@/components/deploy-agent-button";
 import { SUBSCRIPTION_TIERS } from "@/lib/constants";
-import Link from "next/link";
 import {
   Rocket,
   Wrench,
@@ -82,12 +82,11 @@ export default function Home() {
             Launch autonomous AI agents that manage Telegram conversations, trade on DEXes, and interact with TON blockchain. All with one click.
           </p>
           <div className="mt-10 flex items-center justify-center gap-4">
-            <Link
-              href="/dashboard/agents/new"
+            <DeployAgentButton
               className="rounded-lg bg-[var(--primary)] px-6 py-3 text-sm font-medium text-white hover:brightness-110 transition-all"
             >
               Deploy Your Agent
-            </Link>
+            </DeployAgentButton>
             <a
               href="#features"
               className="rounded-lg border border-[var(--border)] px-6 py-3 text-sm text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] transition-colors"
@@ -180,16 +179,15 @@ export default function Home() {
                       {tier.cpuLimit} vCPU per agent
                     </li>
                   </ul>
-                  <Link
-                    href="/dashboard/agents/new"
-                    className={`mt-6 block rounded-lg py-2.5 text-center text-sm font-medium transition-all ${
+                  <DeployAgentButton
+                    className={`mt-6 block w-full rounded-lg py-2.5 text-center text-sm font-medium transition-all ${
                       isPro
                         ? "bg-[var(--primary)] text-white hover:brightness-110"
                         : "border border-[var(--border)] text-[var(--foreground)] hover:bg-[var(--accent)]"
                     }`}
                   >
                     Get Started
-                  </Link>
+                  </DeployAgentButton>
                 </div>
               );
             })}

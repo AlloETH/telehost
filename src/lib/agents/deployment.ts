@@ -281,8 +281,13 @@ export async function stopAgent(agentId: string): Promise<void> {
   if (!agent.coolifyAppUuid) {
     throw new Error("Agent has no Coolify application");
   }
+  await db
+    .update(agents)
+    .set({ status: "stopping", updatedAt: new Date() })
+    .where(eq(agents.id, agentId));
   const coolify = getCoolifyClient();
   await coolify.stopApplication(agent.coolifyAppUuid);
+  await coolify.waitForApplicationStopped(agent.coolifyAppUuid);
   await db
     .update(agents)
     .set({ status: "stopped", stoppedAt: new Date(), updatedAt: new Date() })
@@ -294,6 +299,10 @@ export async function restartAgent(agentId: string): Promise<void> {
   if (!agent.coolifyAppUuid) {
     throw new Error("Agent has no Coolify application");
   }
+  await db
+    .update(agents)
+    .set({ status: "restarting", updatedAt: new Date() })
+    .where(eq(agents.id, agentId));
   const coolify = getCoolifyClient();
   // Stop first to allow shutdown sync, then start fresh
   await coolify.stopApplication(agent.coolifyAppUuid);
@@ -310,6 +319,10 @@ export async function redeployAgent(agentId: string): Promise<void> {
   if (!agent.coolifyAppUuid) {
     throw new Error("Agent has no Coolify application");
   }
+  await db
+    .update(agents)
+    .set({ status: "deploying", updatedAt: new Date() })
+    .where(eq(agents.id, agentId));
   const coolify = getCoolifyClient();
   // Stop first to allow the container's shutdown hook to sync workspace data
   await coolify.stopApplication(agent.coolifyAppUuid);

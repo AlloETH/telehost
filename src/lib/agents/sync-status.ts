@@ -5,7 +5,7 @@ import { getCoolifyClient, CoolifyApiError } from "@/lib/coolify/client";
 
 // States managed by our own logic that Coolify shouldn't override
 // unless Coolify explicitly says the container is running
-const PROTECTED_STATES = ["awaiting_session", "provisioning", "deleting"];
+const PROTECTED_STATES = ["awaiting_session", "provisioning", "deleting", "stopping", "restarting"];
 
 /**
  * Parse Coolify's combined "status:health" string.

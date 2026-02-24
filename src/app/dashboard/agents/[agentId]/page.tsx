@@ -64,7 +64,7 @@ interface Agent {
   config?: AgentConfig;
 }
 
-const TRANSITIONAL_STATES = ["provisioning", "starting", "deploying", "deleting"];
+const TRANSITIONAL_STATES = ["provisioning", "starting", "deploying", "deleting", "stopping", "restarting"];
 
 export default function AgentDetailPage({
   params,
@@ -127,6 +127,8 @@ export default function AgentDetailPage({
     );
   }
 
+  const isBusy = !!actionLoading || TRANSITIONAL_STATES.includes(agent.status);
+
   const needsSession =
     agent.telegramSessionStatus !== "active" &&
     !["running", "deleting"].includes(agent.status);
@@ -172,7 +174,11 @@ export default function AgentDetailPage({
                     ? "Starting..."
                     : agent.status === "deploying"
                       ? "Deployment in progress..."
-                      : "Processing..."}
+                      : agent.status === "stopping"
+                        ? "Stopping..."
+                        : agent.status === "restarting"
+                          ? "Restarting..."
+                          : "Processing..."}
               </p>
               <p className="mt-0.5 text-sm text-[var(--muted-foreground)]">
                 This may take a minute. Status updates automatically.
@@ -218,10 +224,10 @@ export default function AgentDetailPage({
 
       {/* Controls */}
       <div className="mt-6 flex flex-wrap gap-2">
-        {!["running", "starting", "deploying", "deleting", "provisioning"].includes(agent.status) && (
+        {!["running", "starting", "deploying", "deleting", "provisioning", "stopping", "restarting"].includes(agent.status) && (
           <button
             onClick={() => doAction("start")}
-            disabled={!!actionLoading}
+            disabled={isBusy}
             className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
           >
             {actionLoading === "start" ? (
@@ -232,46 +238,46 @@ export default function AgentDetailPage({
             {actionLoading === "start" ? "Starting..." : "Start"}
           </button>
         )}
-        {agent.status === "running" && (
+        {["running", "stopping", "restarting"].includes(agent.status) && (
           <>
             <button
               onClick={() => doAction("stop")}
-              disabled={!!actionLoading}
+              disabled={isBusy}
               className="inline-flex items-center gap-2 rounded-lg bg-yellow-600 px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
             >
-              {actionLoading === "stop" ? (
+              {actionLoading === "stop" || agent.status === "stopping" ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
               ) : (
                 <Square className="h-3.5 w-3.5" />
               )}
-              {actionLoading === "stop" ? "Stopping..." : "Stop"}
+              {actionLoading === "stop" || agent.status === "stopping" ? "Stopping..." : "Stop"}
             </button>
             <button
               onClick={() => doAction("restart")}
-              disabled={!!actionLoading}
+              disabled={isBusy}
               className="inline-flex items-center gap-2 rounded-lg border border-[var(--border)] px-4 py-2 text-sm hover:bg-[var(--accent)] disabled:opacity-50 transition-colors"
             >
-              {actionLoading === "restart" ? (
+              {actionLoading === "restart" || agent.status === "restarting" ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
               ) : (
                 <RotateCcw className="h-3.5 w-3.5" />
               )}
-              {actionLoading === "restart" ? "Restarting..." : "Restart"}
+              {actionLoading === "restart" || agent.status === "restarting" ? "Restarting..." : "Restart"}
             </button>
           </>
         )}
         {!["deleting", "provisioning"].includes(agent.status) && (
           <button
             onClick={() => doAction("redeploy")}
-            disabled={!!actionLoading}
+            disabled={isBusy}
             className="inline-flex items-center gap-2 rounded-lg border border-blue-500/30 px-4 py-2 text-sm text-blue-400 hover:bg-blue-500/10 disabled:opacity-50 transition-colors"
           >
-            {actionLoading === "redeploy" ? (
+            {actionLoading === "redeploy" || agent.status === "deploying" ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
             ) : (
               <RefreshCw className="h-3.5 w-3.5" />
             )}
-            {actionLoading === "redeploy" ? "Redeploying..." : "Update & Redeploy"}
+            {actionLoading === "redeploy" || agent.status === "deploying" ? "Redeploying..." : "Update & Redeploy"}
           </button>
         )}
         <Link
@@ -283,15 +289,15 @@ export default function AgentDetailPage({
         </Link>
         <button
           onClick={doDelete}
-          disabled={!!actionLoading}
+          disabled={isBusy}
           className="ml-auto inline-flex items-center gap-2 rounded-lg border border-red-500/30 px-4 py-2 text-sm text-red-400 hover:bg-red-500/10 disabled:opacity-50 transition-colors"
         >
-          {actionLoading === "delete" ? (
+          {actionLoading === "delete" || agent.status === "deleting" ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
           ) : (
             <Trash2 className="h-3.5 w-3.5" />
           )}
-          {actionLoading === "delete" ? "Deleting..." : "Delete"}
+          {actionLoading === "delete" || agent.status === "deleting" ? "Deleting..." : "Delete"}
         </button>
       </div>
 
@@ -882,6 +888,8 @@ function StatusBadge({ status }: { status: string }) {
     stopped: { bg: "bg-gray-500/20 text-gray-400", dot: "bg-gray-400" },
     starting: { bg: "bg-blue-500/20 text-blue-400", dot: "bg-blue-400" },
     deploying: { bg: "bg-cyan-500/20 text-cyan-400", dot: "bg-cyan-400" },
+    stopping: { bg: "bg-yellow-500/20 text-yellow-400", dot: "bg-yellow-400" },
+    restarting: { bg: "bg-blue-500/20 text-blue-400", dot: "bg-blue-400" },
     error: { bg: "bg-red-500/20 text-red-400", dot: "bg-red-400" },
     provisioning: { bg: "bg-yellow-500/20 text-yellow-400", dot: "bg-yellow-400" },
     awaiting_session: { bg: "bg-purple-500/20 text-purple-400", dot: "bg-purple-400" },
@@ -893,7 +901,7 @@ function StatusBadge({ status }: { status: string }) {
 
   return (
     <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-medium ${c.bg}`}>
-      <span className={`inline-block h-2 w-2 rounded-full ${c.dot} ${status === "running" || status === "deploying" ? "animate-pulse" : ""}`} />
+      <span className={`inline-block h-2 w-2 rounded-full ${c.dot} ${["running", "deploying", "starting", "stopping", "restarting"].includes(status) ? "animate-pulse" : ""}`} />
       {status.replace(/_/g, " ")}
     </span>
   );
