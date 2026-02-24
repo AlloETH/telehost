@@ -8,6 +8,7 @@ const PUBLIC_PATHS = [
   "/api/auth/ton-proof/payload",
   "/api/auth/ton-proof/verify",
   "/api/auth/tma/validate",
+  "/api/telegram-bot/webhook",
   "/api/cron",
 ];
 
