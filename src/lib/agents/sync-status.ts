@@ -41,13 +41,14 @@ function mapCoolifyStatus(
 
   // Don't let Coolify override our own managed states
   if (PROTECTED_STATES.includes(currentDbStatus)) {
-    return { status: currentDbStatus, health, errorDetail: null };
+    return { status: currentDbStatus, health: null, errorDetail: null };
   }
 
   // Map Coolify container states to our states
   if (containerStatus === "exited" || containerStatus === "stopped") {
-    // Stopped containers naturally fail health checks - that's not an error
-    return { status: "stopped", health, errorDetail: null };
+    // Coolify always stores exited as "exited:unhealthy" since health checks
+    // can't run on stopped containers. Clear the misleading health value.
+    return { status: "stopped", health: null, errorDetail: null };
   }
 
   if (containerStatus === "restarting" || containerStatus === "starting") {

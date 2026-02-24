@@ -156,11 +156,12 @@ class CoolifyClient {
   async getLatestDeployment(
     appUuid: string,
   ): Promise<CoolifyDeployment | null> {
-    const data = await this.request<CoolifyDeployment[]>(
-      "GET",
-      `/deployments/app/${appUuid}?skip=0&take=1`,
-    );
-    if (Array.isArray(data) && data.length > 0) return data[0];
+    // Coolify returns { count, deployments: [...] } not a plain array
+    const data = await this.request<{
+      count: number;
+      deployments: CoolifyDeployment[];
+    }>("GET", `/deployments/applications/${appUuid}?skip=0&take=1`);
+    if (data?.deployments?.length > 0) return data.deployments[0];
     return null;
   }
 
