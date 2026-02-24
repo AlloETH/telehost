@@ -16,6 +16,7 @@ import {
   type SubscriptionTier,
 } from "@/lib/constants";
 import { nameToSlug } from "@/lib/agents/slug";
+import { addPersistentVolume } from "@/lib/coolify/volumes";
 
 // Build env vars array for Coolify bulk endpoint.
 function buildEnvVars(opts: {
@@ -186,36 +187,29 @@ export async function createAgent(input: CreateAgentInput): Promise<string> {
     sub.length > 0 ? (sub[0].tier as SubscriptionTier) : "basic";
   const tierConfig = SUBSCRIPTION_TIERS[tier];
 
-  // 6. Create Coolify Docker Compose application (for persistent /data volume)
+  // 6. Create Coolify Docker Image application
   const coolify = getCoolifyClient();
 
-  const composeYaml = [
-    "services:",
-    "  teleton:",
-    `    image: ${TELETON_DOCKER_IMAGE}:${TELETON_DOCKER_TAG}`,
-    "    expose:",
-    `      - "${TELETON_WEBUI_PORT}"`,
-    "    volumes:",
-    "      - teleton-data:/data",
-    "    healthcheck:",
-    `      test: ["CMD-SHELL", "curl -sf http://localhost:${TELETON_WEBUI_PORT}/ || exit 1"]`,
-    "      interval: 30s",
-    "      timeout: 10s",
-    "      retries: 3",
-    "      start_period: 40s",
-    "",
-    "volumes:",
-    "  teleton-data:",
-  ].join("\n");
-
-  const coolifyApp = await coolify.createComposeApplication({
+  const coolifyApp = await coolify.createApplication({
     project_uuid: process.env.COOLIFY_PROJECT_UUID!,
     server_uuid: process.env.COOLIFY_SERVER_UUID!,
     environment_name: process.env.COOLIFY_ENVIRONMENT_NAME || "production",
     destination_uuid: process.env.COOLIFY_DESTINATION_UUID!,
-    docker_compose_raw: composeYaml,
+    docker_registry_image_name: TELETON_DOCKER_IMAGE,
+    docker_registry_image_tag: TELETON_DOCKER_TAG,
+    ports_exposes: TELETON_WEBUI_PORT,
     name: slug,
+    domains: agentDomain,
     instant_deploy: false,
+    limits_memory: `${tierConfig.memoryLimitMb}M`,
+    limits_cpus: tierConfig.cpuLimit,
+    health_check_enabled: true,
+    health_check_path: "/",
+    health_check_port: TELETON_WEBUI_PORT,
+    health_check_interval: 30,
+    health_check_timeout: 10,
+    health_check_retries: 3,
+    health_check_start_period: 40,
   });
 
   // Save Coolify UUID immediately so cleanup works even if later steps fail
@@ -227,12 +221,13 @@ export async function createAgent(input: CreateAgentInput): Promise<string> {
   // Wait for Coolify to fully index the new application
   await waitForCoolifyApp(coolify, coolifyApp.uuid);
 
-  // Set domain, resource limits, and port exposure (not available during compose creation)
-  await coolify.updateApplication(coolifyApp.uuid, {
-    ...(agentDomain ? { fqdn: agentDomain } : {}),
-    limits_memory: `${tierConfig.memoryLimitMb}M`,
-    limits_cpus: tierConfig.cpuLimit,
-    ports_exposes: TELETON_WEBUI_PORT,
+  // Add persistent volume so /data survives redeployments.
+  // Coolify API has no volume endpoint, so we insert directly into its DB.
+  const appDetails = await coolify.getApplication(coolifyApp.uuid);
+  await addPersistentVolume({
+    appId: appDetails.id as number,
+    appUuid: coolifyApp.uuid,
+    mountPath: "/data",
   });
 
   // 7. Generate TON wallet

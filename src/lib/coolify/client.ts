@@ -42,6 +42,7 @@ export interface EnvVar {
 }
 
 export interface CoolifyApplication {
+  id: number;
   uuid: string;
   name: string;
   status: string;
@@ -100,24 +101,12 @@ class CoolifyClient {
     return res.text() as unknown as T;
   }
 
-  // === Applications ===
+  // === Applications (Docker Image) ===
 
   async createApplication(
     params: CreateApplicationParams,
   ): Promise<{ uuid: string }> {
     return this.request("POST", "/applications/dockerimage", params);
-  }
-
-  async createComposeApplication(params: {
-    project_uuid: string;
-    server_uuid: string;
-    environment_name?: string;
-    destination_uuid: string;
-    docker_compose_raw: string;
-    name?: string;
-    instant_deploy?: boolean;
-  }): Promise<{ uuid: string }> {
-    return this.request("POST", "/applications/dockercompose", params);
   }
 
   async getApplication(uuid: string): Promise<CoolifyApplication> {
