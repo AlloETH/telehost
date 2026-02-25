@@ -221,11 +221,8 @@ export async function createAgent(input: CreateAgentInput): Promise<string> {
   // Wait for Coolify to fully index the new application
   await waitForCoolifyApp(coolify, coolifyApp.uuid);
 
-  // Add persistent volume so /data survives redeployments.
-  // Coolify API has no volume endpoint, so we insert directly into its DB.
-  const appDetails = await coolify.getApplication(coolifyApp.uuid);
+  // Add persistent volume so /data survives redeployments
   await addPersistentVolume({
-    appId: appDetails.id as number,
     appUuid: coolifyApp.uuid,
     mountPath: "/data",
   });
