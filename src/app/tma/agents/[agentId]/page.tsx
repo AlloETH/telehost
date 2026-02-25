@@ -111,20 +111,27 @@ export default function TMAAgentDetailPage({
     }
   };
 
-  const doDelete = () => {
+  const doDelete = async () => {
     const webApp = window.Telegram?.WebApp;
-    if (!webApp) return;
-    webApp.showConfirm("Delete this agent? This cannot be undone.", async (confirmed) => {
-      if (!confirmed) return;
-      haptic.notification("warning");
-      setActionLoading("delete");
-      try {
-        await fetch(`/api/agents/${agentId}`, { method: "DELETE" });
-        router.push("/tma");
-      } finally {
-        setActionLoading("");
-      }
-    });
+    let confirmed = false;
+
+    if (webApp?.showConfirm) {
+      confirmed = await new Promise<boolean>((resolve) => {
+        webApp.showConfirm("Delete this agent? This cannot be undone.", resolve);
+      });
+    } else {
+      confirmed = window.confirm("Delete this agent? This cannot be undone.");
+    }
+
+    if (!confirmed) return;
+    haptic.notification("warning");
+    setActionLoading("delete");
+    try {
+      await fetch(`/api/agents/${agentId}`, { method: "DELETE" });
+      router.push("/tma");
+    } finally {
+      setActionLoading("");
+    }
   };
 
   if (loading || !agent) {
