@@ -27,7 +27,7 @@ export const SUBSCRIPTION_TIERS = {
 
 export type SubscriptionTier = keyof typeof SUBSCRIPTION_TIERS;
 
-export const OPENCLAW_DOCKER_IMAGE = "ghcr.io/alloeth/openclaw-host";
+export const OPENCLAW_DOCKER_IMAGE = "ghcr.io/alloeth/telehost-agent";
 export const OPENCLAW_DOCKER_TAG = "latest";
 export const OPENCLAW_GATEWAY_PORT = "18789";
 
