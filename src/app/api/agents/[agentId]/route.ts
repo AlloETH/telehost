@@ -5,10 +5,12 @@ import { eq, and } from "drizzle-orm";
 import { deleteAgent, updateAgentEnvVars } from "@/lib/agents/deployment";
 import { syncAgentFromCoolify } from "@/lib/agents/sync-status";
 import { encrypt, decrypt } from "@/lib/crypto";
-import { generateConfigYaml } from "@/lib/agents/config-generator";
+import {
+  generateOpenClawConfig,
+  type OpenClawConfig,
+} from "@/lib/agents/config-generator";
 import { nameToSlug } from "@/lib/agents/slug";
 import { getCoolifyClient } from "@/lib/coolify/client";
-import { parse } from "yaml";
 
 export async function GET(
   req: NextRequest,
@@ -26,11 +28,9 @@ export async function GET(
       id: agents.id,
       name: agents.name,
       status: agents.status,
-      telegramSessionStatus: agents.telegramSessionStatus,
       coolifyAppUuid: agents.coolifyAppUuid,
       coolifyDomain: agents.coolifyDomain,
       webuiAuthToken: agents.webuiAuthToken,
-      walletAddress: agents.walletAddress,
       lastHealthCheck: agents.lastHealthCheck,
       lastError: agents.lastError,
       restartCount: agents.restartCount,
@@ -66,21 +66,17 @@ export async function GET(
   // Decrypt config to expose editable settings
   try {
     const [tag, salt] = configTag.split(":");
-    const yamlStr = decrypt({ ciphertext: configEncrypted, iv: configIv, tag, salt });
-    const parsed = parse(yamlStr);
-    const agentSection = parsed.agent || {};
-    const telegramSection = parsed.telegram || {};
+    const configStr = decrypt({ ciphertext: configEncrypted, iv: configIv, tag, salt });
+    const parsed = JSON.parse(configStr);
 
     agent.config = {
-      provider: agentSection.provider,
-      apiKey: agentSection.api_key,
-      model: agentSection.model,
-      dmPolicy: telegramSection.dm_policy,
-      groupPolicy: telegramSection.group_policy,
-      ownerName: telegramSection.owner_name,
-      ownerUsername: telegramSection.owner_username,
-      tavilyApiKey: agentSection.tavily_api_key,
-      tonapiKey: agentSection.tonapi_key,
+      provider: parsed.models?.default?.provider,
+      apiKey: parsed._apiKey,
+      model: parsed.models?.default?.model,
+      telegramBotToken: parsed.channels?.telegram?.botToken,
+      discordBotToken: parsed.channels?.discord?.botToken,
+      slackBotToken: parsed.channels?.slack?.botToken,
+      slackAppToken: parsed.channels?.slack?.appToken,
     };
   } catch {
     // Config decryption failed - don't expose config
@@ -92,9 +88,8 @@ export async function GET(
 // Config fields that can be updated via PATCH
 const CONFIG_FIELDS = [
   "provider", "apiKey", "model",
-  "dmPolicy", "groupPolicy",
-  "ownerName", "ownerUsername",
-  "tavilyApiKey", "tonapiKey",
+  "telegramBotToken", "discordBotToken",
+  "slackBotToken", "slackAppToken",
 ] as const;
 
 export async function PATCH(
@@ -133,7 +128,6 @@ export async function PATCH(
       );
     }
 
-    // Check slug uniqueness
     const slugExists = await db
       .select({ id: agents.id })
       .from(agents)
@@ -150,7 +144,6 @@ export async function PATCH(
     dbUpdates.name = body.name;
     dbUpdates.slug = newSlug;
 
-    // Update domain if AGENT_BASE_DOMAIN is set
     const baseDomain = process.env.AGENT_BASE_DOMAIN;
     if (baseDomain) {
       const newDomain = `https://${newSlug}.${baseDomain}`;
@@ -169,60 +162,41 @@ export async function PATCH(
 
   // Handle config field changes
   const hasConfigChanges = CONFIG_FIELDS.some((f) => body[f] !== undefined);
-  let newConfigB64: string | undefined;
 
   if (hasConfigChanges) {
     // Decrypt current config
     const [tag, salt] = agent.configTag.split(":");
-    const currentYaml = decrypt({
+    const currentConfigStr = decrypt({
       ciphertext: agent.configEncrypted,
       iv: agent.configIv,
       tag,
       salt,
     });
-    const currentConfig = parse(currentYaml);
+    const currentConfig = JSON.parse(currentConfigStr);
 
-    // Build AgentConfig from current config + overrides
-    const agentSection = currentConfig.agent || {};
-    const telegramSection = currentConfig.telegram || {};
-    const webuiSection = currentConfig.webui || {};
-
-    let phone = String(telegramSection.phone ?? "");
-    if (phone && !phone.startsWith("+")) phone = "+" + phone;
-
-    const mergedConfig = {
-      provider: body.provider ?? agentSection.provider,
-      apiKey: body.apiKey ?? agentSection.api_key,
-      model: body.model ?? agentSection.model,
-      utilityModel: agentSection.utility_model,
-      maxTokens: agentSection.max_tokens,
-      temperature: agentSection.temperature,
-      telegramApiId: telegramSection.api_id,
-      telegramApiHash: telegramSection.api_hash,
-      telegramPhone: phone,
-      adminIds: telegramSection.admin_ids || [],
-      dmPolicy: body.dmPolicy ?? telegramSection.dm_policy,
-      groupPolicy: body.groupPolicy ?? telegramSection.group_policy,
-      requireMention: telegramSection.require_mention,
-      debouncMs: telegramSection.debounce_ms,
-      botToken: telegramSection.bot_token,
-      ownerName: body.ownerName ?? telegramSection.owner_name,
-      ownerUsername: body.ownerUsername ?? telegramSection.owner_username,
-      tavilyApiKey: body.tavilyApiKey ?? agentSection.tavily_api_key,
-      tonapiKey: body.tonapiKey ?? agentSection.tonapi_key,
-      webuiEnabled: webuiSection.enabled,
-      webuiPort: webuiSection.port,
-      webuiAuthToken: webuiSection.auth_token,
+    // Build new OpenClaw config from current + overrides
+    const newConfig: OpenClawConfig = {
+      provider: body.provider ?? currentConfig.models?.default?.provider ?? "",
+      apiKey: body.apiKey ?? currentConfig._apiKey ?? "",
+      model: body.model ?? currentConfig.models?.default?.model ?? "",
+      telegramBotToken: body.telegramBotToken ?? currentConfig.channels?.telegram?.botToken,
+      discordBotToken: body.discordBotToken ?? currentConfig.channels?.discord?.botToken,
+      slackBotToken: body.slackBotToken ?? currentConfig.channels?.slack?.botToken,
+      slackAppToken: body.slackAppToken ?? currentConfig.channels?.slack?.appToken,
     };
 
-    // Regenerate YAML and re-encrypt
-    const newYaml = generateConfigYaml(mergedConfig);
-    const encrypted = encrypt(newYaml);
+    // Regenerate config and re-encrypt
+    const { configJson } = generateOpenClawConfig(newConfig);
+    // Preserve the API key in stored config
+    const configWithKey = JSON.parse(configJson);
+    configWithKey._apiKey = newConfig.apiKey;
+    const configToStore = JSON.stringify(configWithKey, null, 2);
+
+    const encrypted = encrypt(configToStore);
 
     dbUpdates.configEncrypted = encrypted.ciphertext;
     dbUpdates.configIv = encrypted.iv;
     dbUpdates.configTag = encrypted.tag + ":" + encrypted.salt;
-    newConfigB64 = Buffer.from(newYaml).toString("base64");
 
     if (agent.coolifyAppUuid) {
       needsRedeploy = true;
@@ -233,7 +207,7 @@ export async function PATCH(
 
   // Update env vars and redeploy
   if (needsRedeploy && agent.coolifyAppUuid) {
-    await updateAgentEnvVars(agentId, { configB64: newConfigB64 });
+    await updateAgentEnvVars(agentId);
     const coolify = getCoolifyClient();
     await coolify.startApplication(agent.coolifyAppUuid);
   }

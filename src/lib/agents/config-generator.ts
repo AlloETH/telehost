@@ -1,88 +1,102 @@
-import { stringify } from "yaml";
 import { randomBytes } from "crypto";
 
-export interface AgentConfig {
-  // Agent / LLM
+export interface OpenClawConfig {
+  // LLM provider
   provider: string;
   apiKey: string;
   model: string;
-  utilityModel?: string;
-  maxTokens?: number;
-  temperature?: number;
 
-  // Telegram
-  telegramApiId: number;
-  telegramApiHash: string;
-  telegramPhone: string;
-  adminIds: number[];
-  dmPolicy?: string;
-  groupPolicy?: string;
-  requireMention?: boolean;
-  debouncMs?: number;
-  botToken?: string;
-  ownerName?: string;
-  ownerUsername?: string;
+  // Optional channel tokens
+  telegramBotToken?: string;
+  discordBotToken?: string;
+  slackBotToken?: string;
+  slackAppToken?: string;
+}
 
-  // Optional
-  tavilyApiKey?: string;
-  tonapiKey?: string;
-  webuiEnabled?: boolean;
-  webuiPort?: number;
-  webuiAuthToken?: string;
+/** Map our provider names to OpenClaw provider identifiers */
+function mapProvider(provider: string): string {
+  const mapping: Record<string, string> = {
+    anthropic: "anthropic",
+    openai: "openai",
+    google: "google",
+    xai: "xai",
+    groq: "groq",
+    openrouter: "openrouter",
+  };
+  return mapping[provider] || provider;
+}
+
+/** Map provider to the env var name OpenClaw uses for the API key */
+export function providerEnvKey(provider: string): string {
+  const mapping: Record<string, string> = {
+    anthropic: "ANTHROPIC_API_KEY",
+    openai: "OPENAI_API_KEY",
+    google: "GEMINI_API_KEY",
+    xai: "ZAI_API_KEY",
+    groq: "GROQ_API_KEY",
+    openrouter: "OPENROUTER_API_KEY",
+  };
+  return mapping[provider] || "OPENAI_API_KEY";
 }
 
 /**
- * Generate config and return both the YAML string and the generated auth token.
+ * Generate OpenClaw config JSON and a gateway token.
  */
-export function generateConfigWithToken(config: AgentConfig): { yaml: string; authToken: string } {
-  const authToken = config.webuiAuthToken || randomBytes(24).toString("hex");
-  const yaml = generateConfigYaml({ ...config, webuiAuthToken: authToken });
-  return { yaml, authToken };
-}
+export function generateOpenClawConfig(config: OpenClawConfig): {
+  configJson: string;
+  gatewayToken: string;
+} {
+  const gatewayToken = randomBytes(32).toString("hex");
 
-export function generateConfigYaml(config: AgentConfig): string {
-  const yamlObj: Record<string, unknown> = {
-    agent: {
-      provider: config.provider,
-      api_key: config.apiKey,
-      model: config.model,
-      ...(config.utilityModel && { utility_model: config.utilityModel }),
-      max_tokens: config.maxTokens ?? 4096,
-      temperature: config.temperature ?? 0.7,
-      max_agentic_iterations: 5,
+  const openclawConfig: Record<string, unknown> = {
+    models: {
+      default: {
+        provider: mapProvider(config.provider),
+        model: config.model,
+      },
     },
-    telegram: {
-      api_id: config.telegramApiId,
-      api_hash: config.telegramApiHash,
-      phone: config.telegramPhone,
-      session_name: "teleton_session",
-      admin_ids: config.adminIds,
-      dm_policy: config.dmPolicy ?? "pairing",
-      group_policy: config.groupPolicy ?? "open",
-      require_mention: config.requireMention ?? true,
-      debounce_ms: config.debouncMs ?? 1500,
-      ...(config.botToken && { bot_token: config.botToken }),
-      ...(config.ownerName && { owner_name: config.ownerName }),
-      ...(config.ownerUsername && { owner_username: config.ownerUsername }),
+    gateway: {
+      port: 18789,
+      bind: "lan",
     },
-    embedding: {
-      provider: "local",
-    },
-    webui: {
-      enabled: config.webuiEnabled ?? true,
-      port: config.webuiPort ?? 7777,
-      host: "0.0.0.0",
-      auth_token: config.webuiAuthToken || randomBytes(24).toString("hex"),
+    agents: {
+      defaults: {
+        sandbox: { mode: "off" },
+      },
     },
   };
 
-  if (config.tavilyApiKey) {
-    (yamlObj.agent as Record<string, unknown>).tavily_api_key =
-      config.tavilyApiKey;
-  }
-  if (config.tonapiKey) {
-    (yamlObj.agent as Record<string, unknown>).tonapi_key = config.tonapiKey;
+  // Channels — only include enabled ones
+  const channels: Record<string, unknown> = {};
+
+  if (config.telegramBotToken) {
+    channels.telegram = {
+      enabled: true,
+      botToken: config.telegramBotToken,
+    };
   }
 
-  return stringify(yamlObj);
+  if (config.discordBotToken) {
+    channels.discord = {
+      enabled: true,
+      botToken: config.discordBotToken,
+    };
+  }
+
+  if (config.slackBotToken && config.slackAppToken) {
+    channels.slack = {
+      enabled: true,
+      botToken: config.slackBotToken,
+      appToken: config.slackAppToken,
+    };
+  }
+
+  if (Object.keys(channels).length > 0) {
+    openclawConfig.channels = channels;
+  }
+
+  return {
+    configJson: JSON.stringify(openclawConfig, null, 2),
+    gatewayToken,
+  };
 }

@@ -3,9 +3,9 @@ import { TonConnectProvider } from "@/components/auth/ton-connect-provider";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Telehost - Deploy Teleton AI Agents",
+  title: "OpenClaw Host - Deploy AI Agents",
   description:
-    "Deploy and manage autonomous Telegram + TON blockchain AI agents with one click.",
+    "Deploy and manage OpenClaw AI agents with one click. 20+ messaging channels, any LLM provider.",
 };
 
 export default function RootLayout({

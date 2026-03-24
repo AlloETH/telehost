@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useTonConnectUI, useTonAddress } from "@tonconnect/ui-react";
 import { Wallet, Check } from "lucide-react";
 import { SUBSCRIPTION_TIERS } from "@/lib/constants";
-import { useTMA } from "../tma-provider";
+import { useApp } from "@/components/app-provider";
 import { useTelegramBackButton, useTelegramHaptic } from "@/lib/hooks/use-telegram";
 import { useRouter } from "next/navigation";
 
@@ -26,7 +26,7 @@ interface Payment {
 
 export default function TMABillingPage() {
   const router = useRouter();
-  const { walletAddress } = useTMA();
+  const { walletAddress } = useApp();
   const haptic = useTelegramHaptic();
   const [tonConnectUI] = useTonConnectUI();
   const tonAddress = useTonAddress();
@@ -35,7 +35,7 @@ export default function TMABillingPage() {
   const [loading, setLoading] = useState(true);
   const [paying, setPaying] = useState("");
 
-  useTelegramBackButton(() => router.push("/tma"));
+  useTelegramBackButton(() => router.push("/app"));
 
   const needsWallet = walletAddress?.startsWith("tma_");
 

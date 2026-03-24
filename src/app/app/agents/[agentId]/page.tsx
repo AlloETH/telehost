@@ -11,14 +11,12 @@ import {
   ScrollText,
   Loader2,
   AlertTriangle,
-  MessageSquareWarning,
   Globe,
   Bot,
   Timer,
   KeyRound,
   ExternalLink,
   Heart,
-  Wallet,
   Settings,
   Save,
   ChevronDown,
@@ -32,12 +30,10 @@ interface Agent {
   id: string;
   name: string;
   status: string;
-  telegramSessionStatus: string;
   coolifyDomain: string | null;
   coolifyStatus?: string;
   healthStatus?: string | null;
   webuiAuthToken: string | null;
-  walletAddress: string | null;
   lastError: string | null;
   lastHealthCheck: string | null;
   restartCount: number;
@@ -48,12 +44,10 @@ interface Agent {
     provider?: string;
     apiKey?: string;
     model?: string;
-    dmPolicy?: string;
-    groupPolicy?: string;
-    ownerName?: string;
-    ownerUsername?: string;
-    tavilyApiKey?: string;
-    tonapiKey?: string;
+    telegramBotToken?: string;
+    discordBotToken?: string;
+    slackBotToken?: string;
+    slackAppToken?: string;
   };
 }
 
@@ -71,14 +65,13 @@ export default function TMAAgentDetailPage({
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState("");
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const [walletLoading, setWalletLoading] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [settingsLoading, setSettingsLoading] = useState(false);
   const [settingsSaved, setSettingsSaved] = useState(false);
   const [copied, setCopied] = useState("");
   const [settings, setSettings] = useState<Record<string, string>>({});
 
-  useTelegramBackButton(() => router.push("/tma"));
+  useTelegramBackButton(() => router.push("/app"));
 
   const fetchAgent = useCallback(() => {
     fetch(`/api/agents/${agentId}`)
@@ -117,10 +110,10 @@ export default function TMAAgentDetailPage({
 
     if (webApp?.showConfirm) {
       confirmed = await new Promise<boolean>((resolve) => {
-        webApp.showConfirm("Delete this agent? This cannot be undone.", resolve);
+        webApp.showConfirm("Delete this instance? This cannot be undone.", resolve);
       });
     } else {
-      confirmed = window.confirm("Delete this agent? This cannot be undone.");
+      confirmed = window.confirm("Delete this instance? This cannot be undone.");
     }
 
     if (!confirmed) return;
@@ -128,7 +121,7 @@ export default function TMAAgentDetailPage({
     setActionLoading("delete");
     try {
       await fetch(`/api/agents/${agentId}`, { method: "DELETE" });
-      router.push("/tma");
+      router.push("/app");
     } finally {
       setActionLoading("");
     }
@@ -143,7 +136,6 @@ export default function TMAAgentDetailPage({
   }
 
   const isBusy = !!actionLoading || TRANSITIONAL.includes(agent.status);
-  const needsSession = agent.telegramSessionStatus !== "active" && !["running", "deleting"].includes(agent.status);
 
   const copyText = (text: string, key: string) => {
     navigator.clipboard.writeText(text);
@@ -152,36 +144,16 @@ export default function TMAAgentDetailPage({
     setTimeout(() => setCopied(""), 2000);
   };
 
-  const generateWallet = async () => {
-    haptic.impact("medium");
-    setWalletLoading(true);
-    try {
-      const res = await fetch(`/api/agents/${agentId}/wallet`, { method: "POST" });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Failed to generate wallet");
-      }
-      haptic.notification("success");
-      fetchAgent();
-    } catch {
-      haptic.notification("error");
-    } finally {
-      setWalletLoading(false);
-    }
-  };
-
   const openSettings = () => {
     if (agent.config) {
       setSettings({
         provider: agent.config.provider || "",
         apiKey: agent.config.apiKey || "",
         model: agent.config.model || "",
-        dmPolicy: agent.config.dmPolicy || "",
-        groupPolicy: agent.config.groupPolicy || "",
-        ownerName: agent.config.ownerName || "",
-        ownerUsername: agent.config.ownerUsername || "",
-        tavilyApiKey: agent.config.tavilyApiKey || "",
-        tonapiKey: agent.config.tonapiKey || "",
+        telegramBotToken: agent.config.telegramBotToken || "",
+        discordBotToken: agent.config.discordBotToken || "",
+        slackBotToken: agent.config.slackBotToken || "",
+        slackAppToken: agent.config.slackAppToken || "",
       });
     }
     setShowSettings(!showSettings);
@@ -258,22 +230,6 @@ export default function TMAAgentDetailPage({
 
         {agent.trialEndsAt && <TrialBanner trialEndsAt={agent.trialEndsAt} status={agent.status} />}
 
-        {needsSession && (
-          <button
-            onClick={() => {
-              haptic.impact("light");
-              router.push(`/tma/agents/${agentId}/session`);
-            }}
-            className="w-full flex items-center gap-3 rounded-xl border border-purple-500/30 bg-purple-500/5 p-3 text-left"
-          >
-            <MessageSquareWarning className="h-5 w-5 text-purple-400 shrink-0" />
-            <div className="flex-1">
-              <p className="text-sm font-medium text-purple-400">Telegram session required</p>
-              <p className="text-xs text-[var(--muted-foreground)]">Tap to authenticate</p>
-            </div>
-          </button>
-        )}
-
         {agent.lastError && (
           <div className="flex items-start gap-3 rounded-xl border border-red-500/30 bg-red-500/5 p-3">
             <AlertTriangle className="h-4 w-4 text-red-400 mt-0.5 shrink-0" />
@@ -281,6 +237,19 @@ export default function TMAAgentDetailPage({
           </div>
         )}
       </div>
+
+      {/* Open Control UI button */}
+      {agent.coolifyDomain && agent.status === "running" && (
+        <a
+          href={agent.coolifyDomain.startsWith("http") ? agent.coolifyDomain : `https://${agent.coolifyDomain}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mb-4 w-full flex items-center justify-center gap-2 rounded-xl bg-[var(--primary)] text-white p-3.5 text-sm font-medium active:opacity-80 transition-opacity"
+        >
+          <ExternalLink className="h-4 w-4" />
+          Open Control UI
+        </a>
+      )}
 
       {/* Actions */}
       <div className="space-y-2 mb-4">
@@ -331,7 +300,7 @@ export default function TMAAgentDetailPage({
         <ActionButton
           onClick={() => {
             haptic.selection();
-            router.push(`/tma/agents/${agentId}/logs`);
+            router.push(`/app/agents/${agentId}/logs`);
           }}
           icon={<ScrollText className="h-4 w-4" />}
           label="View Logs"
@@ -384,40 +353,6 @@ export default function TMAAgentDetailPage({
           </div>
         )}
 
-        {/* Wallet */}
-        <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-3">
-          <div className="flex items-center gap-2 mb-2">
-            <Wallet className="h-4 w-4 text-[var(--muted-foreground)]" />
-            <span className="text-xs text-[var(--muted-foreground)]">TON Wallet</span>
-          </div>
-          {agent.walletAddress ? (
-            <button
-              onClick={() => copyText(agent.walletAddress!, "wallet")}
-              className="flex items-center gap-2 text-sm w-full text-left"
-            >
-              <code className="flex-1 font-mono truncate">{agent.walletAddress}</code>
-              {copied === "wallet" ? (
-                <Check className="h-3.5 w-3.5 text-green-400 shrink-0" />
-              ) : (
-                <Copy className="h-3.5 w-3.5 text-[var(--muted-foreground)] shrink-0" />
-              )}
-            </button>
-          ) : (
-            <button
-              onClick={generateWallet}
-              disabled={walletLoading}
-              className="flex items-center gap-2 text-sm text-[var(--primary)] disabled:opacity-50"
-            >
-              {walletLoading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Wallet className="h-4 w-4" />
-              )}
-              {walletLoading ? "Generating..." : "Generate Wallet"}
-            </button>
-          )}
-        </div>
-
         {/* Configuration summary */}
         {agent.config && (
           <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-3">
@@ -430,10 +365,14 @@ export default function TMAAgentDetailPage({
               <span className="capitalize">{agent.config.provider || "-"}</span>
               <span className="text-[var(--muted-foreground)]">Model</span>
               <span className="truncate">{agent.config.model || "-"}</span>
-              <span className="text-[var(--muted-foreground)]">DM Policy</span>
-              <span>{agent.config.dmPolicy || "-"}</span>
-              <span className="text-[var(--muted-foreground)]">Group Policy</span>
-              <span>{agent.config.groupPolicy || "-"}</span>
+              <span className="text-[var(--muted-foreground)]">Channels</span>
+              <span>
+                {[
+                  agent.config.telegramBotToken && "Telegram",
+                  agent.config.discordBotToken && "Discord",
+                  agent.config.slackBotToken && "Slack",
+                ].filter(Boolean).join(", ") || "None"}
+              </span>
             </div>
           </div>
         )}
@@ -442,7 +381,7 @@ export default function TMAAgentDetailPage({
           <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-3">
             <div className="flex items-center gap-2">
               <KeyRound className="h-4 w-4 text-[var(--muted-foreground)]" />
-              <span className="text-xs text-[var(--muted-foreground)]">WebUI Auth Token</span>
+              <span className="text-xs text-[var(--muted-foreground)]">Gateway Token</span>
             </div>
             <button
               onClick={() => copyText(agent.webuiAuthToken!, "token")}
@@ -484,23 +423,16 @@ export default function TMAAgentDetailPage({
                 ]} />
               <SettingsField label="Model" value={settings.model} onChange={(v) => setSettings((s) => ({ ...s, model: v }))} />
               <SettingsField label="API Key" value={settings.apiKey} onChange={(v) => setSettings((s) => ({ ...s, apiKey: v }))} inputType="password" />
-              <SettingsField label="DM Policy" value={settings.dmPolicy} onChange={(v) => setSettings((s) => ({ ...s, dmPolicy: v }))}
-                type="select" options={[
-                  { value: "pairing", label: "Pairing" },
-                  { value: "open", label: "Open" },
-                  { value: "allowlist", label: "Allowlist" },
-                  { value: "disabled", label: "Disabled" },
-                ]} />
-              <SettingsField label="Group Policy" value={settings.groupPolicy} onChange={(v) => setSettings((s) => ({ ...s, groupPolicy: v }))}
-                type="select" options={[
-                  { value: "open", label: "Open" },
-                  { value: "allowlist", label: "Allowlist" },
-                  { value: "disabled", label: "Disabled" },
-                ]} />
-              <SettingsField label="Owner Name" value={settings.ownerName} onChange={(v) => setSettings((s) => ({ ...s, ownerName: v }))} />
-              <SettingsField label="Owner Username" value={settings.ownerUsername} onChange={(v) => setSettings((s) => ({ ...s, ownerUsername: v }))} />
-              <SettingsField label="Tavily API Key" value={settings.tavilyApiKey} onChange={(v) => setSettings((s) => ({ ...s, tavilyApiKey: v }))} inputType="password" />
-              <SettingsField label="TonAPI Key" value={settings.tonapiKey} onChange={(v) => setSettings((s) => ({ ...s, tonapiKey: v }))} inputType="password" />
+
+              <div className="border-t border-[var(--border)] pt-3 mt-3">
+                <p className="text-xs text-[var(--muted-foreground)] mb-2">Channels</p>
+              </div>
+              <SettingsField label="Telegram Bot Token" value={settings.telegramBotToken} onChange={(v) => setSettings((s) => ({ ...s, telegramBotToken: v }))} inputType="password" />
+              <SettingsField label="Discord Bot Token" value={settings.discordBotToken} onChange={(v) => setSettings((s) => ({ ...s, discordBotToken: v }))} inputType="password" />
+              <SettingsField label="Slack Bot Token" value={settings.slackBotToken} onChange={(v) => setSettings((s) => ({ ...s, slackBotToken: v }))} inputType="password" />
+              {settings.slackBotToken && (
+                <SettingsField label="Slack App Token" value={settings.slackAppToken} onChange={(v) => setSettings((s) => ({ ...s, slackAppToken: v }))} inputType="password" />
+              )}
 
               <button
                 onClick={saveSettings}
@@ -532,7 +464,7 @@ export default function TMAAgentDetailPage({
         ) : (
           <Trash2 className="h-4 w-4" />
         )}
-        {actionLoading === "delete" || agent.status === "deleting" ? "Deleting..." : "Delete Agent"}
+        {actionLoading === "delete" || agent.status === "deleting" ? "Deleting..." : "Delete Instance"}
       </button>
     </div>
   );
@@ -585,7 +517,7 @@ function TrialBanner({ trialEndsAt, status }: { trialEndsAt: string; status: str
           <Timer className="h-4 w-4 text-orange-400" />
           <p className="text-sm font-medium text-orange-400">Trial expired</p>
         </div>
-        <p className="mt-1 text-xs text-[var(--muted-foreground)]">Subscribe to restart your agent</p>
+        <p className="mt-1 text-xs text-[var(--muted-foreground)]">Subscribe to restart your instance</p>
       </div>
     );
   }
@@ -678,7 +610,6 @@ function StatusBadge({ status }: { status: string }) {
     deploying: "bg-cyan-500/20 text-cyan-400",
     error: "bg-red-500/20 text-red-400",
     provisioning: "bg-yellow-500/20 text-yellow-400",
-    awaiting_session: "bg-purple-500/20 text-purple-400",
     suspended: "bg-orange-500/20 text-orange-400",
   };
 

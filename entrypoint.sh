@@ -4,7 +4,7 @@ set -e
 SYNC_URL="${TELEHOST_SYNC_URL}"
 AGENT_ID="${TELEHOST_AGENT_ID}"
 SYNC_TOKEN="${TELEHOST_SYNC_TOKEN}"
-DATA_DIR="/data"
+DATA_DIR="/home/node/.openclaw"
 
 # --- Restore archive from API on startup ---
 restore_data() {
@@ -29,7 +29,7 @@ restore_data() {
   fi
 }
 
-# --- Upload archive to API on shutdown ---
+# --- Upload archive to API ---
 upload_data() {
   if [ -z "$SYNC_URL" ] || [ -z "$AGENT_ID" ] || [ -z "$SYNC_TOKEN" ]; then
     echo "[sync] No sync credentials configured, skipping upload"
@@ -37,7 +37,7 @@ upload_data() {
   fi
 
   echo "[sync] Creating data archive..."
-  tar czf /tmp/data-upload.tar.gz -C / data 2>/dev/null || {
+  tar czf /tmp/data-upload.tar.gz -C / home/node/.openclaw 2>/dev/null || {
     echo "[sync] Warning: tar had errors, attempting upload anyway"
   }
 
@@ -60,14 +60,12 @@ upload_data() {
 # --- Signal handler ---
 shutdown() {
   echo "[sync] Received shutdown signal, syncing data..."
-  # Kill periodic sync
   if [ -n "$SYNC_PID" ]; then
     kill "$SYNC_PID" 2>/dev/null || true
   fi
-  # Kill the agent process gracefully
-  if [ -n "$AGENT_PID" ]; then
-    kill -TERM "$AGENT_PID" 2>/dev/null || true
-    wait "$AGENT_PID" 2>/dev/null || true
+  if [ -n "$GATEWAY_PID" ]; then
+    kill -TERM "$GATEWAY_PID" 2>/dev/null || true
+    wait "$GATEWAY_PID" 2>/dev/null || true
   fi
   upload_data
   exit 0
@@ -87,16 +85,9 @@ periodic_sync() {
 # 1. Restore persisted data
 restore_data
 
-# 2. Decode env vars (overrides persisted config with latest from dashboard)
-if [ -n "$TELETON_CONFIG_B64" ]; then
-  echo "$TELETON_CONFIG_B64" | base64 -d > "${DATA_DIR}/config.yaml"
-fi
-if [ -n "$TELETON_SESSION_B64" ]; then
-  echo "$TELETON_SESSION_B64" | base64 -d > "${DATA_DIR}/telegram_session.txt"
-fi
-if [ -n "$TELETON_WALLET_B64" ]; then
-  echo "$TELETON_WALLET_B64" | base64 -d > "${DATA_DIR}/wallet.json"
-  chmod 600 "${DATA_DIR}/wallet.json"
+# 2. Decode OpenClaw config from env var (overrides persisted config with latest from dashboard)
+if [ -n "$OPENCLAW_CONFIG_B64" ]; then
+  echo "$OPENCLAW_CONFIG_B64" | base64 -d > "${DATA_DIR}/openclaw.json"
 fi
 
 mkdir -p "${DATA_DIR}/workspace"
@@ -105,15 +96,17 @@ mkdir -p "${DATA_DIR}/workspace"
 periodic_sync &
 SYNC_PID=$!
 
-# 4. Start agent in background so we can trap signals
-node dist/cli/index.js start &
-AGENT_PID=$!
+# 4. Start OpenClaw gateway in background so we can trap signals
+# Force LAN bind so Coolify reverse proxy can reach the gateway
+export OPENCLAW_GATEWAY_BIND=lan
+node dist/index.js gateway &
+GATEWAY_PID=$!
 
-# Wait for agent to exit
-wait "$AGENT_PID"
+# Wait for gateway to exit
+wait "$GATEWAY_PID"
 EXIT_CODE=$?
 
-# Agent exited on its own — stop periodic sync and upload before container dies
+# Gateway exited on its own — stop periodic sync and upload before container dies
 if [ -n "$SYNC_PID" ]; then
   kill "$SYNC_PID" 2>/dev/null || true
 fi

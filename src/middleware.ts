@@ -26,37 +26,44 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  // Only protect /dashboard, /tma, and /api routes
+  // Only protect /app and /api routes
   if (
-    !pathname.startsWith("/dashboard") &&
-    !pathname.startsWith("/tma") &&
+    !pathname.startsWith("/app") &&
     !pathname.startsWith("/api")
   ) {
     return NextResponse.next();
   }
 
-  // TMA pages handle their own auth via initData validation
-  if (pathname.startsWith("/tma")) {
+  // /app pages: TMA auth happens client-side via AppProvider (sets cookie),
+  // desktop auth uses session cookie. Both result in a session cookie.
+  // Let the page render — AppProvider handles redirect if no session.
+  if (pathname.startsWith("/app")) {
+    // If there's a session cookie, inject user ID for server components
+    const token = req.cookies.get(SESSION_COOKIE_NAME)?.value;
+    if (token) {
+      const session = await verifySessionToken(token);
+      if (session) {
+        const requestHeaders = new Headers(req.headers);
+        requestHeaders.set("x-user-id", session.userId);
+        requestHeaders.set("x-wallet-address", session.walletAddress);
+        return NextResponse.next({ request: { headers: requestHeaders } });
+      }
+    }
+    // No cookie yet — let AppProvider handle auth client-side
     return NextResponse.next();
   }
 
+  // API routes require session cookie
   const token = req.cookies.get(SESSION_COOKIE_NAME)?.value;
   if (!token) {
-    if (pathname.startsWith("/api")) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-    return NextResponse.redirect(new URL("/", req.url));
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const session = await verifySessionToken(token);
   if (!session) {
-    if (pathname.startsWith("/api")) {
-      return NextResponse.json({ error: "Invalid session" }, { status: 401 });
-    }
-    return NextResponse.redirect(new URL("/", req.url));
+    return NextResponse.json({ error: "Invalid session" }, { status: 401 });
   }
 
-  // Attach user info to request headers for downstream API routes
   const requestHeaders = new Headers(req.headers);
   requestHeaders.set("x-user-id", session.userId);
   requestHeaders.set("x-wallet-address", session.walletAddress);
@@ -66,5 +73,5 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/tma/:path*", "/api/:path*"],
+  matcher: ["/app/:path*", "/api/:path*"],
 };

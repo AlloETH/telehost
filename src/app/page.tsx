@@ -16,12 +16,12 @@ const features: { icon: LucideIcon; title: string; desc: string }[] = [
   {
     icon: Rocket,
     title: "One-Click Deploy",
-    desc: "Configure your agent, connect Telegram, and deploy. We handle Docker, scaling, and monitoring.",
+    desc: "Pick your LLM, name your instance, and deploy. We handle Docker, scaling, and monitoring.",
   },
   {
     icon: Wrench,
-    title: "112+ Built-in Tools",
-    desc: "Telegram messaging, TON transfers, DEX trading, web search, file management, and more.",
+    title: "20+ Channels",
+    desc: "WhatsApp, Telegram, Discord, Slack, Signal, iMessage, Google Chat, Teams, and more.",
   },
   {
     icon: Wallet,
@@ -30,7 +30,7 @@ const features: { icon: LucideIcon; title: string; desc: string }[] = [
   },
   {
     icon: Brain,
-    title: "Multiple LLMs",
+    title: "Any LLM Provider",
     desc: "Use Anthropic, OpenAI, Google, xAI, Groq, or OpenRouter. Bring your own API key.",
   },
   {
@@ -40,8 +40,8 @@ const features: { icon: LucideIcon; title: string; desc: string }[] = [
   },
   {
     icon: Activity,
-    title: "Real-time Monitoring",
-    desc: "View logs, check health, and manage agents through the dashboard or built-in WebUI.",
+    title: "Built-in Control UI",
+    desc: "Configure channels, manage agents, approve actions, and monitor sessions through OpenClaw's web UI.",
   },
 ];
 
@@ -52,9 +52,9 @@ export default function Home() {
       <header className="sticky top-0 z-50 flex items-center justify-between border-b border-[var(--border)] bg-[var(--background)]/80 px-6 py-4 backdrop-blur-md">
         <div className="flex items-center gap-2">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--primary)] text-sm font-bold text-white">
-            T
+            O
           </div>
-          <span className="text-lg font-bold tracking-tight">Telehost</span>
+          <span className="text-lg font-bold tracking-tight">OpenClaw Host</span>
         </div>
         <nav className="hidden items-center gap-6 md:flex">
           <a
@@ -81,22 +81,21 @@ export default function Home() {
         <div className="mx-auto max-w-4xl px-6 pb-24 pt-28 text-center">
           <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--card)] px-4 py-1.5 text-sm text-[var(--muted-foreground)]">
             <span className="inline-block h-2 w-2 rounded-full bg-[var(--success)] animate-pulse" />
-            Powered by Teleton Agent
+            Powered by OpenClaw
           </div>
           <h2 className="text-5xl font-bold tracking-tight leading-[1.1] md:text-6xl">
-            Deploy AI Agents for
+            Deploy Your Personal
             <br />
-            <span className="gradient-text">Telegram + TON</span>
+            <span className="gradient-text">AI Assistant</span>
           </h2>
           <p className="mx-auto mt-6 max-w-xl text-lg leading-relaxed text-[var(--muted-foreground)]">
-            Launch autonomous AI agents that manage Telegram conversations,
-            trade on DEXes, and interact with TON blockchain. All with one
-            click.
+            Launch OpenClaw instances that connect to WhatsApp, Telegram,
+            Discord, Slack, and 20+ more channels. One click, any LLM.
           </p>
           <div className="mt-10 flex flex-col items-center gap-3">
             <div className="flex items-center gap-4">
               <DeployAgentButton className="rounded-lg bg-[var(--primary)] px-6 py-3 text-sm font-medium text-white hover:brightness-110 transition-all">
-                Deploy Your Agent
+                Deploy Now
               </DeployAgentButton>
               <a
                 href="#features"
@@ -161,7 +160,7 @@ export default function Home() {
               Pay with TON. No credit cards, no KYC. Cancel anytime.
             </p>
             <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-amber-500/30 bg-amber-500/5 px-4 py-1.5 text-sm text-amber-400">
-              Try free for 1 hour - 1 agent, no payment needed
+              Try free for 1 hour - 1 instance, no payment needed
             </div>
           </div>
           <div className="mt-16 grid grid-cols-1 gap-6 md:grid-cols-3">
@@ -196,15 +195,15 @@ export default function Home() {
                   <ul className="mt-6 space-y-3 text-sm">
                     <li className="flex items-center gap-2 text-[var(--muted-foreground)]">
                       <Check className="h-4 w-4 text-[var(--success)]" />
-                      {tier.maxAgents} agent{tier.maxAgents > 1 ? "s" : ""}
+                      {tier.maxAgents} instance{tier.maxAgents > 1 ? "s" : ""}
                     </li>
                     <li className="flex items-center gap-2 text-[var(--muted-foreground)]">
                       <Check className="h-4 w-4 text-[var(--success)]" />
-                      {tier.memoryLimitMb} MB RAM per agent
+                      {tier.memoryLimitMb} MB RAM per instance
                     </li>
                     <li className="flex items-center gap-2 text-[var(--muted-foreground)]">
                       <Check className="h-4 w-4 text-[var(--success)]" />
-                      {tier.cpuLimit} vCPU per agent
+                      {tier.cpuLimit} vCPU per instance
                     </li>
                   </ul>
                   <DeployAgentButton
@@ -228,12 +227,12 @@ export default function Home() {
         <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-6">
           <div className="flex items-center gap-2 text-sm text-[var(--muted-foreground)]">
             <div className="flex h-6 w-6 items-center justify-center rounded bg-[var(--primary)] text-xs font-bold text-white">
-              T
+              O
             </div>
-            Telehost
+            OpenClaw Host
           </div>
           <p className="text-sm text-[var(--muted-foreground)]">
-            Powered by Teleton Agent &amp; TON Blockchain
+            Powered by OpenClaw &amp; TON Blockchain
           </p>
         </div>
       </footer>

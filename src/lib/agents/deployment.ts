@@ -2,16 +2,16 @@ import { db } from "@/lib/db";
 import { agents, subscriptions } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { encrypt, decrypt } from "@/lib/crypto";
-import { generateWallet, reconstructWalletJson } from "@/lib/ton/wallet";
 import { getCoolifyClient, type EnvVar } from "@/lib/coolify/client";
 import {
-  generateConfigWithToken,
-  type AgentConfig,
+  generateOpenClawConfig,
+  providerEnvKey,
+  type OpenClawConfig,
 } from "@/lib/agents/config-generator";
 import {
-  TELETON_DOCKER_IMAGE,
-  TELETON_DOCKER_TAG,
-  TELETON_WEBUI_PORT,
+  OPENCLAW_DOCKER_IMAGE,
+  OPENCLAW_DOCKER_TAG,
+  OPENCLAW_GATEWAY_PORT,
   SUBSCRIPTION_TIERS,
   type SubscriptionTier,
 } from "@/lib/constants";
@@ -22,17 +22,18 @@ import { addPersistentVolume } from "@/lib/coolify/volumes";
 function buildEnvVars(opts: {
   agentId: string;
   syncToken: string;
+  gatewayToken: string;
   configB64?: string;
-  walletB64?: string;
-  sessionB64?: string;
+  provider: string;
+  apiKey: string;
 }): EnvVar[] {
   const syncUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "";
   return [
-    { key: "TELETON_HOME", value: "/data", is_build_time: false },
     { key: "NODE_ENV", value: "production", is_build_time: false },
-    { key: "TELETON_CONFIG_B64", value: opts.configB64 || "", is_build_time: false },
-    { key: "TELETON_SESSION_B64", value: opts.sessionB64 || "", is_build_time: false },
-    { key: "TELETON_WALLET_B64", value: opts.walletB64 || "", is_build_time: false },
+    { key: "OPENCLAW_GATEWAY_BIND", value: "lan", is_build_time: false },
+    { key: "OPENCLAW_CONFIG_B64", value: opts.configB64 || "", is_build_time: false },
+    { key: "OPENCLAW_GATEWAY_TOKEN", value: opts.gatewayToken, is_build_time: false },
+    { key: providerEnvKey(opts.provider), value: opts.apiKey, is_build_time: false },
     { key: "TELEHOST_SYNC_URL", value: syncUrl, is_build_time: false },
     { key: "TELEHOST_AGENT_ID", value: opts.agentId, is_build_time: false },
     { key: "TELEHOST_SYNC_TOKEN", value: opts.syncToken, is_build_time: false },
@@ -40,63 +41,35 @@ function buildEnvVars(opts: {
 }
 
 // Update env vars on Coolify application from DB data.
-// Pass overrides for values you already have to avoid unnecessary decryption.
-export async function updateAgentEnvVars(
-  agentId: string,
-  overrides?: {
-    configB64?: string;
-    sessionB64?: string;
-    walletB64?: string;
-  },
-): Promise<void> {
+export async function updateAgentEnvVars(agentId: string): Promise<void> {
   const agent = await getAgentOrThrow(agentId);
   if (!agent.coolifyAppUuid) return;
 
-  // Reconstruct config B64
-  let configB64 = overrides?.configB64;
-  if (!configB64 && agent.configEncrypted && agent.configIv && agent.configTag) {
+  let configB64 = "";
+  let provider = "";
+  let apiKey = "";
+
+  if (agent.configEncrypted && agent.configIv && agent.configTag) {
     const [tag, salt] = agent.configTag.split(":");
-    const yaml = decrypt({ ciphertext: agent.configEncrypted, iv: agent.configIv, tag, salt });
-    configB64 = Buffer.from(yaml).toString("base64");
-  }
+    const configJson = decrypt({ ciphertext: agent.configEncrypted, iv: agent.configIv, tag, salt });
+    configB64 = Buffer.from(configJson).toString("base64");
 
-  // Reconstruct wallet B64
-  let walletB64 = overrides?.walletB64;
-  if (!walletB64 && agent.walletMnemonicEncrypted && agent.walletMnemonicIv && agent.walletMnemonicTag) {
-    const [tag, salt] = agent.walletMnemonicTag.split(":");
-    const mnemonicStr = decrypt({
-      ciphertext: agent.walletMnemonicEncrypted,
-      iv: agent.walletMnemonicIv,
-      tag,
-      salt,
-    });
-    const walletJson = await reconstructWalletJson(
-      mnemonicStr.split(" "),
-      agent.walletAddress || "",
-      (agent.createdAt ?? new Date()).toISOString(),
-    );
-    walletB64 = Buffer.from(walletJson).toString("base64");
-  }
-
-  // Reconstruct session B64
-  let sessionB64 = overrides?.sessionB64;
-  if (!sessionB64 && agent.telegramSessionEncrypted && agent.telegramSessionIv && agent.telegramSessionTag) {
-    const [tag, salt] = agent.telegramSessionTag.split(":");
-    const session = decrypt({
-      ciphertext: agent.telegramSessionEncrypted,
-      iv: agent.telegramSessionIv,
-      tag,
-      salt,
-    });
-    sessionB64 = Buffer.from(session).toString("base64");
+    try {
+      const parsed = JSON.parse(configJson);
+      provider = parsed.models?.default?.provider || "";
+      apiKey = parsed._apiKey || "";
+    } catch {
+      // Config parsing failed
+    }
   }
 
   const envVars = buildEnvVars({
     agentId: agent.id,
     syncToken: agent.webuiAuthToken || "",
+    gatewayToken: agent.webuiAuthToken || "",
     configB64,
-    walletB64,
-    sessionB64,
+    provider,
+    apiKey,
   });
   const coolify = getCoolifyClient();
   await coolify.bulkSetEnvVars(agent.coolifyAppUuid, envVars);
@@ -105,10 +78,13 @@ export async function updateAgentEnvVars(
 export interface CreateAgentInput {
   userId: string;
   name: string;
-  config: AgentConfig;
-  telegramSessionString?: string;
+  config: OpenClawConfig;
 }
 
+/**
+ * Create agent record in DB and kick off async provisioning.
+ * Returns the agent ID immediately so the UI can redirect.
+ */
 export async function createAgent(input: CreateAgentInput): Promise<string> {
   const { userId, name, config } = input;
 
@@ -123,7 +99,6 @@ export async function createAgent(input: CreateAgentInput): Promise<string> {
 
   const hasActiveSubscription = sub.length > 0;
 
-  // Enforce trial limit: 1 free trial agent per account
   if (!hasActiveSubscription) {
     const existingAgents = await db
       .select({ id: agents.id })
@@ -157,14 +132,22 @@ export async function createAgent(input: CreateAgentInput): Promise<string> {
   const baseDomain = process.env.AGENT_BASE_DOMAIN;
   const agentDomain = baseDomain ? `https://${slug}.${baseDomain}` : undefined;
 
-  // 3. Generate config.yaml and encrypt it
-  const { yaml: configYaml, authToken } = generateConfigWithToken(config);
-  const encryptedConfig = encrypt(configYaml);
+  // 3. Generate OpenClaw config and encrypt it
+  const { configJson, gatewayToken } = generateOpenClawConfig(config);
+
+  const configWithKey = JSON.parse(configJson);
+  configWithKey._apiKey = config.apiKey;
+  const configToStore = JSON.stringify(configWithKey, null, 2);
+
+  const encryptedConfig = encrypt(configToStore);
 
   // 4. Create agent record in DB
   const trialEndsAt = hasActiveSubscription
     ? null
-    : new Date(Date.now() + 60 * 60 * 1000); // 1 hour trial
+    : new Date(Date.now() + 60 * 60 * 1000);
+
+  const tier: SubscriptionTier =
+    sub.length > 0 ? (sub[0].tier as SubscriptionTier) : "basic";
 
   const [agent] = await db
     .insert(agents)
@@ -174,7 +157,7 @@ export async function createAgent(input: CreateAgentInput): Promise<string> {
       slug,
       status: "provisioning",
       coolifyDomain: agentDomain || null,
-      webuiAuthToken: authToken,
+      webuiAuthToken: gatewayToken,
       configEncrypted: encryptedConfig.ciphertext,
       configIv: encryptedConfig.iv,
       configTag: encryptedConfig.tag + ":" + encryptedConfig.salt,
@@ -182,112 +165,100 @@ export async function createAgent(input: CreateAgentInput): Promise<string> {
     })
     .returning();
 
-  // 5. Determine resource limits from subscription tier
-  const tier: SubscriptionTier =
-    sub.length > 0 ? (sub[0].tier as SubscriptionTier) : "basic";
-  const tierConfig = SUBSCRIPTION_TIERS[tier];
+  // 5. Kick off async provisioning (don't await — return immediately)
+  provisionAgent(agent.id, {
+    slug,
+    agentDomain,
+    tier,
+    configJson,
+    gatewayToken,
+    config,
+  }).catch((err) => {
+    console.error(`[provision] Failed for agent ${agent.id}:`, err);
+    db.update(agents)
+      .set({
+        status: "error",
+        lastError: err instanceof Error ? err.message : "Provisioning failed",
+        updatedAt: new Date(),
+      })
+      .where(eq(agents.id, agent.id))
+      .catch(console.error);
+  });
 
-  // 6. Create Coolify Docker Image application
+  return agent.id;
+}
+
+/** Async provisioning: creates Coolify app, sets env vars, starts container */
+async function provisionAgent(
+  agentId: string,
+  opts: {
+    slug: string;
+    agentDomain: string | undefined;
+    tier: SubscriptionTier;
+    configJson: string;
+    gatewayToken: string;
+    config: OpenClawConfig;
+  },
+): Promise<void> {
+  const tierConfig = SUBSCRIPTION_TIERS[opts.tier];
   const coolify = getCoolifyClient();
 
+  // Create Coolify Docker Image application
   const coolifyApp = await coolify.createApplication({
     project_uuid: process.env.COOLIFY_PROJECT_UUID!,
     server_uuid: process.env.COOLIFY_SERVER_UUID!,
     environment_name: process.env.COOLIFY_ENVIRONMENT_NAME || "production",
     destination_uuid: process.env.COOLIFY_DESTINATION_UUID!,
-    docker_registry_image_name: TELETON_DOCKER_IMAGE,
-    docker_registry_image_tag: TELETON_DOCKER_TAG,
-    ports_exposes: TELETON_WEBUI_PORT,
-    name: slug,
-    domains: agentDomain,
+    docker_registry_image_name: OPENCLAW_DOCKER_IMAGE,
+    docker_registry_image_tag: OPENCLAW_DOCKER_TAG,
+    ports_exposes: OPENCLAW_GATEWAY_PORT,
+    name: opts.slug,
+    domains: opts.agentDomain,
     instant_deploy: false,
     limits_memory: `${tierConfig.memoryLimitMb}M`,
     limits_cpus: tierConfig.cpuLimit,
     health_check_enabled: true,
-    health_check_path: "/",
-    health_check_port: TELETON_WEBUI_PORT,
+    health_check_path: "/healthz",
+    health_check_port: OPENCLAW_GATEWAY_PORT,
     health_check_interval: 30,
     health_check_timeout: 10,
     health_check_retries: 3,
-    health_check_start_period: 40,
+    health_check_start_period: 60,
   });
 
-  // Save Coolify UUID immediately so cleanup works even if later steps fail
+  // Save Coolify UUID
   await db
     .update(agents)
     .set({ coolifyAppUuid: coolifyApp.uuid, updatedAt: new Date() })
-    .where(eq(agents.id, agent.id));
+    .where(eq(agents.id, agentId));
 
-  // Wait for Coolify to fully index the new application
+  // Wait for Coolify to index the app
   await waitForCoolifyApp(coolify, coolifyApp.uuid);
 
-  // Add persistent volume so /data survives redeployments
+  // Add persistent volume
   await addPersistentVolume({
     appUuid: coolifyApp.uuid,
-    mountPath: "/data",
+    mountPath: "/home/node/.openclaw",
   });
 
-  // 7. Generate TON wallet
-  const wallet = await generateWallet();
-  const walletJson = JSON.stringify(wallet, null, 2);
-  const walletB64 = Buffer.from(walletJson).toString("base64");
-
-  // Store encrypted mnemonic in DB
-  const encryptedMnemonic = encrypt(wallet.mnemonic.join(" "));
-  await db
-    .update(agents)
-    .set({
-      walletAddress: wallet.address,
-      walletMnemonicEncrypted: encryptedMnemonic.ciphertext,
-      walletMnemonicIv: encryptedMnemonic.iv,
-      walletMnemonicTag: encryptedMnemonic.tag + ":" + encryptedMnemonic.salt,
-    })
-    .where(eq(agents.id, agent.id));
-
-  // 8. Handle session string if provided (wizard flow)
-  let sessionB64: string | undefined;
-  if (input.telegramSessionString) {
-    sessionB64 = Buffer.from(input.telegramSessionString).toString("base64");
-
-    const encryptedSession = encrypt(input.telegramSessionString);
-    await db
-      .update(agents)
-      .set({
-        telegramSessionEncrypted: encryptedSession.ciphertext,
-        telegramSessionIv: encryptedSession.iv,
-        telegramSessionTag: encryptedSession.tag + ":" + encryptedSession.salt,
-        telegramSessionStatus: "active",
-        status: "starting",
-        updatedAt: new Date(),
-      })
-      .where(eq(agents.id, agent.id));
-  } else {
-    await db
-      .update(agents)
-      .set({
-        status: "awaiting_session",
-        updatedAt: new Date(),
-      })
-      .where(eq(agents.id, agent.id));
-  }
-
-  // 9. Set all env vars on the Coolify application
-  const configB64 = Buffer.from(configYaml).toString("base64");
+  // Set env vars
+  const configB64 = Buffer.from(opts.configJson).toString("base64");
   const envVars = buildEnvVars({
-    agentId: agent.id,
-    syncToken: authToken,
+    agentId,
+    syncToken: opts.gatewayToken,
+    gatewayToken: opts.gatewayToken,
     configB64,
-    walletB64,
-    sessionB64,
+    provider: opts.config.provider,
+    apiKey: opts.config.apiKey,
   });
   await coolify.bulkSetEnvVars(coolifyApp.uuid, envVars);
 
-  // 10. Deploy if session is ready
-  if (input.telegramSessionString) {
-    await coolify.startApplication(coolifyApp.uuid);
-  }
-
-  return agent.id;
+  // Start the container
+  await coolify.startApplication(coolifyApp.uuid);
+  await db
+    .update(agents)
+    .set({ status: "starting", updatedAt: new Date() })
+    .where(eq(agents.id, agentId));
 }
 
 export async function startAgent(agentId: string): Promise<void> {
@@ -331,7 +302,6 @@ export async function restartAgent(agentId: string): Promise<void> {
     .set({ status: "restarting", updatedAt: new Date() })
     .where(eq(agents.id, agentId));
   const coolify = getCoolifyClient();
-  // Stop first to allow shutdown sync, then start fresh
   await coolify.stopApplication(agent.coolifyAppUuid);
   await coolify.waitForApplicationStopped(agent.coolifyAppUuid);
   await coolify.startApplication(agent.coolifyAppUuid);
@@ -351,10 +321,8 @@ export async function redeployAgent(agentId: string): Promise<void> {
     .set({ status: "deploying", updatedAt: new Date() })
     .where(eq(agents.id, agentId));
   const coolify = getCoolifyClient();
-  // Stop first to allow the container's shutdown hook to sync workspace data
   await coolify.stopApplication(agent.coolifyAppUuid);
   await coolify.waitForApplicationStopped(agent.coolifyAppUuid);
-  // Now update env vars and start fresh
   await updateAgentEnvVars(agentId);
   await coolify.startApplication(agent.coolifyAppUuid);
   await db
@@ -394,36 +362,6 @@ export async function getAgentLogs(
 
   const coolify = getCoolifyClient();
   return coolify.getApplicationLogs(agent.coolifyAppUuid, tail);
-}
-
-export async function injectTelegramSession(
-  agentId: string,
-  sessionString: string,
-): Promise<void> {
-  const agent = await getAgentOrThrow(agentId);
-  if (!agent.coolifyAppUuid) {
-    throw new Error("Agent has no Coolify application");
-  }
-
-  // Encrypt session for DB storage
-  const encryptedSession = encrypt(sessionString);
-
-  // Store encrypted session in DB
-  await db
-    .update(agents)
-    .set({
-      telegramSessionEncrypted: encryptedSession.ciphertext,
-      telegramSessionIv: encryptedSession.iv,
-      telegramSessionTag:
-        encryptedSession.tag + ":" + encryptedSession.salt,
-      telegramSessionStatus: "active",
-      updatedAt: new Date(),
-    })
-    .where(eq(agents.id, agentId));
-
-  // Update env vars with session embedded
-  const sessionB64 = Buffer.from(sessionString).toString("base64");
-  await updateAgentEnvVars(agentId, { sessionB64 });
 }
 
 async function getAgentOrThrow(agentId: string) {

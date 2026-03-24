@@ -3,14 +3,13 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Bot, Wallet, ChevronRight } from "lucide-react";
-import { useTMA } from "./tma-provider";
+import { useApp } from "@/components/app-provider";
 import { useTelegramHaptic } from "@/lib/hooks/use-telegram";
 
 interface Agent {
   id: string;
   name: string;
   status: string;
-  telegramSessionStatus: string;
   createdAt: string;
 }
 
@@ -19,8 +18,8 @@ interface BillingStatus {
   status: string;
 }
 
-export default function TMAAgentsPage() {
-  const { walletAddress, telegramUser } = useTMA();
+export default function HomePage() {
+  const { walletAddress, telegramUser } = useApp();
   const router = useRouter();
   const haptic = useTelegramHaptic();
   const [agents, setAgents] = useState<Agent[]>([]);
@@ -51,8 +50,7 @@ export default function TMAAgentsPage() {
   }
 
   return (
-    <div className="px-4 pt-2">
-      {/* Greeting */}
+    <div className="px-4 pt-2 mx-auto max-w-4xl">
       {telegramUser && (
         <p className="text-sm text-[var(--muted-foreground)] mb-3">
           Hi, {telegramUser.firstName}
@@ -66,12 +64,11 @@ export default function TMAAgentsPage() {
         <StatCard value={billing?.tier || "Free"} label="Plan" capitalize />
       </div>
 
-      {/* Wallet prompt */}
       {needsWallet && (
         <button
           onClick={() => {
             haptic.impact("light");
-            router.push("/tma/billing");
+            router.push("/app/billing");
           }}
           className="mb-4 w-full flex items-center gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3.5 active:opacity-80 transition-opacity"
         >
@@ -84,24 +81,23 @@ export default function TMAAgentsPage() {
         </button>
       )}
 
-      {/* Agent list */}
       {agents.length === 0 ? (
         <div className="mt-6 rounded-2xl border border-dashed border-[var(--border)] p-10 text-center">
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--primary)]/10 text-[var(--primary)]">
             <Bot className="h-7 w-7" />
           </div>
-          <p className="mt-4 text-base font-semibold">No agents yet</p>
+          <p className="mt-4 text-base font-semibold">No instances yet</p>
           <p className="mt-1 text-sm text-[var(--muted-foreground)]">
-            Deploy your first AI agent
+            Deploy your first OpenClaw instance
           </p>
           <button
             onClick={() => {
               haptic.impact("medium");
-              router.push("/tma/deploy");
+              router.push("/app/deploy");
             }}
-            className="mt-5 rounded-xl bg-[var(--primary)] px-8 py-3 text-sm font-semibold text-white active:opacity-80 transition-opacity"
+            className="mt-5 rounded-xl bg-[var(--primary)] px-8 py-3 text-sm font-semibold text-white active:opacity-80 transition-opacity hover:brightness-110"
           >
-            Deploy Agent
+            Deploy OpenClaw
           </button>
         </div>
       ) : (
@@ -111,9 +107,9 @@ export default function TMAAgentsPage() {
               key={agent.id}
               onClick={() => {
                 haptic.selection();
-                router.push(`/tma/agents/${agent.id}`);
+                router.push(`/app/agents/${agent.id}`);
               }}
-              className="w-full flex items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--card)] p-4 text-left active:opacity-80 transition-opacity"
+              className="w-full flex items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--card)] p-4 text-left active:opacity-80 transition-opacity hover:border-[var(--muted-foreground)]/30"
             >
               <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[var(--accent)] text-sm font-bold shrink-0">
                 {agent.name.charAt(0).toUpperCase()}
@@ -125,11 +121,6 @@ export default function TMAAgentsPage() {
                 </p>
               </div>
               <div className="flex items-center gap-2 shrink-0">
-                {agent.telegramSessionStatus !== "active" && (
-                  <span className="rounded-full bg-yellow-500/10 px-2 py-0.5 text-[10px] font-medium text-[var(--warning)]">
-                    Session
-                  </span>
-                )}
                 <StatusDot status={agent.status} />
                 <ChevronRight className="h-4 w-4 text-[var(--muted-foreground)]" />
               </div>
@@ -163,7 +154,6 @@ function StatusDot({ status }: { status: string }) {
     deploying: "bg-cyan-400",
     error: "bg-red-400",
     provisioning: "bg-yellow-400",
-    awaiting_session: "bg-purple-400",
     suspended: "bg-orange-400",
   };
 

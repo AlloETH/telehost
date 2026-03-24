@@ -1,14 +1,14 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Clock, CircleCheck, ExternalLink } from "lucide-react";
+import { Clock, ExternalLink, ChevronDown, ChevronUp, ArrowLeft } from "lucide-react";
 import {
   useTelegramBackButton,
   useTelegramMainButton,
   useTelegramHaptic,
 } from "@/lib/hooks/use-telegram";
-import { useTMA } from "@/app/tma/tma-provider";
+import { useApp } from "@/components/app-provider";
 
 interface ProviderModel {
   value: string;
@@ -126,35 +126,14 @@ const LLM_PROVIDERS: LLMProvider[] = [
   },
 ];
 
-const DM_POLICIES = [
-  { value: "pairing", label: "Pairing" },
-  { value: "open", label: "Open" },
-  { value: "allowlist", label: "Allowlist" },
-  { value: "disabled", label: "Disabled" },
-];
-
-const GROUP_POLICIES = [
-  { value: "open", label: "Open" },
-  { value: "allowlist", label: "Allowlist" },
-  { value: "disabled", label: "Disabled" },
-];
-
-type VerifyStep = "idle" | "sending" | "code" | "2fa" | "verified";
-
 export default function TMADeployPage() {
   const router = useRouter();
+  const { isTMA } = useApp();
   const haptic = useTelegramHaptic();
-  const { telegramUser } = useTMA();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const pollRef = useRef(false);
-
-  const [verifyStep, setVerifyStep] = useState<VerifyStep>("idle");
-  const [sessionKey, setSessionKey] = useState("");
-  const [tgCode, setTgCode] = useState("");
-  const [tgPassword, setTgPassword] = useState("");
-  const [sessionString, setSessionString] = useState("");
+  const [showChannels, setShowChannels] = useState(false);
 
   const [nameStatus, setNameStatus] = useState<{
     checking: boolean;
@@ -167,16 +146,10 @@ export default function TMADeployPage() {
     provider: "anthropic",
     apiKey: "",
     model: "claude-sonnet-4-6",
-    telegramApiId: "",
-    telegramApiHash: "",
-    telegramPhone: "",
-    adminIds: telegramUser?.id ? String(telegramUser.id) : "",
-    dmPolicy: "pairing",
-    groupPolicy: "open",
-    ownerName: "",
-    ownerUsername: "",
-    tavilyApiKey: "",
-    tonapiKey: "",
+    telegramBotToken: "",
+    discordBotToken: "",
+    slackBotToken: "",
+    slackAppToken: "",
   });
 
   const currentProvider = LLM_PROVIDERS.find((p) => p.value === form.provider)!;
@@ -186,38 +159,24 @@ export default function TMADeployPage() {
 
   // Back button navigates steps
   useTelegramBackButton(
-    step > 1 ? () => setStep((s) => s - 1) : () => router.push("/tma"),
+    step > 1 ? () => setStep((s) => s - 1) : () => router.push("/app"),
   );
 
   // Main button
-  const mainButtonText =
-    step < 4 ? "Next" :
-    verifyStep === "code" ? "Verify Code" :
-    verifyStep === "2fa" ? "Submit Password" :
-    verifyStep === "verified" ? "Deploy Agent" :
-    "Start Verification";
+  const mainButtonText = step === 1 ? "Next" : "Deploy";
 
   const canProceed = () => {
     if (step === 1) return !!form.name && !!form.apiKey && nameStatus.available === true;
-    if (step === 2) return !!form.telegramApiId && !!form.telegramApiHash && !!form.telegramPhone;
-    if (step === 3) return true;
-    if (step === 4) {
-      if (verifyStep === "code") return tgCode.length >= 5;
-      if (verifyStep === "2fa") return !!tgPassword;
-      return true;
-    }
+    if (step === 2) return true;
     return true;
   };
 
   const mainButtonAction = () => {
-    if (step < 4) {
+    if (step === 1) {
       haptic.impact("light");
-      setStep((s) => s + 1);
-    } else if (step === 4) {
-      if (verifyStep === "idle") startVerification();
-      else if (verifyStep === "code") submitCode();
-      else if (verifyStep === "2fa") submit2FA();
-      else if (verifyStep === "verified") deploy();
+      setStep(2);
+    } else if (step === 2) {
+      deploy();
     }
   };
 
@@ -247,116 +206,6 @@ export default function TMADeployPage() {
     return () => clearTimeout(t);
   }, [form.name, checkName]);
 
-  // Telegram verification
-  const pollStatus = (key: string) => {
-    pollRef.current = true;
-    const poll = async () => {
-      if (!pollRef.current) return;
-      try {
-        const res = await fetch(`/api/telegram-session/status?sessionKey=${key}`);
-        const data = await res.json();
-        if (data.status === "awaiting_code") {
-          setVerifyStep("code");
-          haptic.notification("success");
-          return;
-        }
-        if (data.status === "completed") {
-          setSessionString(data.sessionString || "");
-          setVerifyStep("verified");
-          haptic.notification("success");
-          return;
-        }
-        if (data.status === "error") {
-          setError(data.error || "Verification failed");
-          setVerifyStep("idle");
-          return;
-        }
-        setTimeout(poll, 1000);
-      } catch {
-        setError("Connection lost");
-        setVerifyStep("idle");
-      }
-    };
-    poll();
-  };
-
-  const startVerification = async () => {
-    setLoading(true);
-    setError("");
-    setVerifyStep("sending");
-    try {
-      const res = await fetch("/api/telegram-session/start", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          apiId: parseInt(form.telegramApiId),
-          apiHash: form.telegramApiHash,
-          phone: form.telegramPhone,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      setSessionKey(data.sessionKey);
-      pollStatus(data.sessionKey);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to start");
-      setVerifyStep("idle");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const submitCode = async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const res = await fetch("/api/telegram-session/verify-code", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionKey, code: tgCode }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      if (data.status === "awaiting_2fa") setVerifyStep("2fa");
-      else if (data.status === "completed") {
-        setSessionString(data.sessionString || "");
-        setVerifyStep("verified");
-        haptic.notification("success");
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const submit2FA = async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const res = await fetch("/api/telegram-session/verify-2fa", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionKey, password: tgPassword }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      if (data.status === "completed") {
-        setSessionString(data.sessionString || "");
-        setVerifyStep("verified");
-        haptic.notification("success");
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    return () => { pollRef.current = false; };
-  }, []);
-
   const deploy = async () => {
     setLoading(true);
     setError("");
@@ -365,23 +214,20 @@ export default function TMADeployPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ...form,
-          telegramApiId: parseInt(form.telegramApiId, 10),
-          adminIds: form.adminIds
-            .split(",")
-            .map((id) => parseInt(id.trim(), 10))
-            .filter((id) => !isNaN(id)),
-          ownerName: form.ownerName || undefined,
-          ownerUsername: form.ownerUsername || undefined,
-          tavilyApiKey: form.tavilyApiKey || undefined,
-          tonapiKey: form.tonapiKey || undefined,
-          telegramSessionString: sessionString || undefined,
+          name: form.name,
+          provider: form.provider,
+          apiKey: form.apiKey,
+          model: form.model,
+          telegramBotToken: form.telegramBotToken || undefined,
+          discordBotToken: form.discordBotToken || undefined,
+          slackBotToken: form.slackBotToken || undefined,
+          slackAppToken: form.slackAppToken || undefined,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       haptic.notification("success");
-      router.push(`/tma/agents/${data.agentId}`);
+      router.push(`/app/agents/${data.agentId}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Deploy failed");
       haptic.notification("error");
@@ -394,7 +240,7 @@ export default function TMADeployPage() {
     <div className="px-4 pt-4">
       {/* Progress */}
       <div className="flex items-center gap-1 mb-4">
-        {[1, 2, 3, 4].map((s) => (
+        {[1, 2].map((s) => (
           <div
             key={s}
             className={`h-1 flex-1 rounded-full ${
@@ -406,9 +252,7 @@ export default function TMADeployPage() {
 
       <h1 className="text-lg font-bold mb-1">
         {step === 1 && "AI Model"}
-        {step === 2 && "Telegram"}
-        {step === 3 && "Integrations"}
-        {step === 4 && "Verify & Deploy"}
+        {step === 2 && "Review & Deploy"}
       </h1>
 
       {/* Trial banner */}
@@ -426,7 +270,7 @@ export default function TMADeployPage() {
       {/* Step 1: Model */}
       {step === 1 && (
         <div className="space-y-4">
-          <Field label="Agent Name" value={form.name} onChange={(v) => update("name", v)} placeholder="My Agent" />
+          <Field label="Instance Name" value={form.name} onChange={(v) => update("name", v)} placeholder="My OpenClaw" />
           {nameStatus.checking && <p className="text-xs text-[var(--muted-foreground)]">Checking...</p>}
           {nameStatus.available === true && <p className="text-xs text-green-400">Available - {nameStatus.slug}</p>}
           {nameStatus.available === false && <p className="text-xs text-red-400">Name taken</p>}
@@ -478,109 +322,93 @@ export default function TMADeployPage() {
         </div>
       )}
 
-      {/* Step 2: Telegram */}
+      {/* Step 2: Review & Deploy */}
       {step === 2 && (
-        <div className="space-y-4">
-          <div className="rounded-lg bg-blue-500/5 border border-blue-500/20 p-3">
-            <p className="text-xs text-[var(--foreground)]/70">
-              Get credentials at my.telegram.org: Login &gt; API Development Tools &gt; Create Application.
-            </p>
-          </div>
-          <Field label="API ID" value={form.telegramApiId} onChange={(v) => update("telegramApiId", v)} placeholder="12345678" inputMode="numeric" />
-          <Field label="API Hash" value={form.telegramApiHash} onChange={(v) => update("telegramApiHash", v)} placeholder="0123456789abcdef..." />
-          <Field label="Phone Number" value={form.telegramPhone} onChange={(v) => update("telegramPhone", v)} placeholder="+1234567890" type="tel" />
-
-          <div>
-            <Field label="Your Telegram ID" value={form.adminIds} onChange={(v) => update("adminIds", v)} placeholder="123456789" inputMode="numeric" />
-            <p className="mt-1 text-xs text-[var(--muted-foreground)]">
-              Message @userinfobot on Telegram to get your ID. Separate multiple IDs with commas.
-            </p>
-          </div>
-
-          <div>
-            <label className="block text-xs text-[var(--muted-foreground)] mb-1.5">DM Policy</label>
-            <select value={form.dmPolicy} onChange={(e) => update("dmPolicy", e.target.value)} className="w-full rounded-xl border border-[var(--border)] bg-[var(--card)] px-3 py-3 text-base appearance-none">
-              {DM_POLICIES.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-xs text-[var(--muted-foreground)] mb-1.5">Group Policy</label>
-            <select value={form.groupPolicy} onChange={(e) => update("groupPolicy", e.target.value)} className="w-full rounded-xl border border-[var(--border)] bg-[var(--card)] px-3 py-3 text-base appearance-none">
-              {GROUP_POLICIES.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
-            </select>
-          </div>
-        </div>
-      )}
-
-      {/* Step 3: Optional integrations */}
-      {step === 3 && (
-        <div className="space-y-4">
-          <p className="text-sm text-[var(--muted-foreground)]">These are optional. You can add them later.</p>
-          <Field label="Owner Display Name" value={form.ownerName} onChange={(v) => update("ownerName", v)} placeholder="Your name" />
-          <Field label="Owner Username" value={form.ownerUsername} onChange={(v) => update("ownerUsername", v)} placeholder="@username" />
-          <Field label="Tavily API Key (web search)" value={form.tavilyApiKey} onChange={(v) => update("tavilyApiKey", v)} type="password" placeholder="tvly-..." />
-          <Field label="TonAPI Key (blockchain)" value={form.tonapiKey} onChange={(v) => update("tonapiKey", v)} type="password" placeholder="AE..." />
-        </div>
-      )}
-
-      {/* Step 4: Verify & Deploy */}
-      {step === 4 && (
         <div className="space-y-4">
           {/* Summary */}
           <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-3 space-y-1 text-sm">
             <div className="flex justify-between"><span className="text-[var(--muted-foreground)]">Name</span><span>{form.name}</span></div>
             <div className="flex justify-between"><span className="text-[var(--muted-foreground)]">Provider</span><span className="capitalize">{form.provider}</span></div>
             <div className="flex justify-between"><span className="text-[var(--muted-foreground)]">Model</span><span className="truncate ml-4">{form.model}</span></div>
-            <div className="flex justify-between"><span className="text-[var(--muted-foreground)]">Phone</span><span>{form.telegramPhone}</span></div>
+            {nameStatus.slug && (
+              <div className="flex justify-between"><span className="text-[var(--muted-foreground)]">URL</span><span className="truncate ml-4 text-[var(--primary)]">{nameStatus.slug}.server.tokn.deal</span></div>
+            )}
           </div>
 
-          {/* Verification status */}
-          {verifyStep === "sending" && (
-            <div className="flex items-center gap-3 p-3">
-              <div className="h-5 w-5 animate-spin rounded-full border-2 border-[var(--primary)] border-t-transparent" />
-              <p className="text-sm text-[var(--muted-foreground)]">Connecting to Telegram...</p>
-            </div>
-          )}
+          <div className="rounded-lg bg-blue-500/5 border border-blue-500/20 p-3">
+            <p className="text-xs text-[var(--foreground)]/70">
+              After deploy, use the OpenClaw Control UI to configure channels, agent personality, tools, and more.
+            </p>
+          </div>
 
-          {verifyStep === "code" && (
-            <div className="space-y-3">
-              <p className="text-sm text-[var(--muted-foreground)]">Enter the code from Telegram.</p>
-              <input
-                type="text"
-                value={tgCode}
-                onChange={(e) => setTgCode(e.target.value)}
-                placeholder="12345"
-                maxLength={6}
-                autoFocus
-                inputMode="numeric"
-                className="w-full rounded-xl border border-[var(--border)] bg-[var(--card)] px-4 py-4 text-center text-3xl tracking-[0.5em] font-mono"
-              />
-            </div>
-          )}
+          {/* Optional channels */}
+          <button
+            onClick={() => setShowChannels(!showChannels)}
+            className="w-full flex items-center justify-between rounded-xl border border-[var(--border)] p-3 text-sm"
+          >
+            <span className="text-[var(--muted-foreground)]">Add channels (optional)</span>
+            {showChannels ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </button>
 
-          {verifyStep === "2fa" && (
-            <div className="space-y-3">
-              <p className="text-sm text-[var(--muted-foreground)]">Enter your 2FA password.</p>
-              <input
+          {showChannels && (
+            <div className="space-y-3 rounded-xl border border-[var(--border)] bg-[var(--card)] p-3">
+              <p className="text-xs text-[var(--muted-foreground)]">
+                Connect messaging channels now or later via the Control UI.
+              </p>
+              <Field
+                label="Telegram Bot Token"
+                value={form.telegramBotToken}
+                onChange={(v) => update("telegramBotToken", v)}
+                placeholder="123456:ABC-DEF..."
                 type="password"
-                value={tgPassword}
-                onChange={(e) => setTgPassword(e.target.value)}
-                autoFocus
-                className="w-full rounded-xl border border-[var(--border)] bg-[var(--card)] px-4 py-3 text-sm"
               />
+              <Field
+                label="Discord Bot Token"
+                value={form.discordBotToken}
+                onChange={(v) => update("discordBotToken", v)}
+                placeholder="Bot token from Discord Developer Portal"
+                type="password"
+              />
+              <Field
+                label="Slack Bot Token"
+                value={form.slackBotToken}
+                onChange={(v) => update("slackBotToken", v)}
+                placeholder="xoxb-..."
+                type="password"
+              />
+              {form.slackBotToken && (
+                <Field
+                  label="Slack App Token"
+                  value={form.slackAppToken}
+                  onChange={(v) => update("slackAppToken", v)}
+                  placeholder="xapp-..."
+                  type="password"
+                />
+              )}
             </div>
           )}
+        </div>
+      )}
 
-          {verifyStep === "verified" && (
-            <div className="flex items-center gap-3 rounded-xl border border-green-500/30 bg-green-500/5 p-3">
-              <CircleCheck className="h-5 w-5 text-green-400 shrink-0" />
-              <div>
-                <p className="text-sm font-medium text-green-400">Verified</p>
-                <p className="text-xs text-[var(--muted-foreground)]">Tap Deploy to launch your agent</p>
-              </div>
-            </div>
+      {/* Desktop action buttons (TMA uses native MainButton) */}
+      {!isTMA && (
+        <div className="flex items-center gap-3 mt-6">
+          {step > 1 && (
+            <button
+              onClick={() => setStep((s) => s - 1)}
+              className="flex items-center gap-2 rounded-xl border border-[var(--border)] px-5 py-3 text-sm font-medium hover:bg-[var(--accent)] transition-colors"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back
+            </button>
           )}
+          <button
+            onClick={mainButtonAction}
+            disabled={!canProceed() || loading}
+            className="flex-1 rounded-xl bg-[var(--primary)] px-6 py-3 text-sm font-medium text-white hover:brightness-110 transition-all disabled:opacity-50"
+          >
+            {loading ? "Deploying..." : mainButtonText}
+          </button>
         </div>
       )}
     </div>

@@ -37,7 +37,7 @@ export default function AgentLogsPage({
       <div className="flex items-center justify-between">
         <div>
           <Link
-            href={`/dashboard/agents/${agentId}`}
+            href={`/app/agents/${agentId}`}
             className="text-sm text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
           >
             &larr; Back to Agent

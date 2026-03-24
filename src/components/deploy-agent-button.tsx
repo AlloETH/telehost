@@ -6,7 +6,7 @@ import { useCallback, useEffect, useRef } from "react";
 export function DeployAgentButton({
   className,
   children,
-  href = "/dashboard/agents/new",
+  href = "/app/deploy",
 }: {
   className?: string;
   children: React.ReactNode;
