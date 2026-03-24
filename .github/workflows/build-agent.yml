@@ -10,7 +10,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository_owner }}/openclaw-host
+  IMAGE_NAME: openclaw-host
 
 jobs:
   build:
@@ -34,5 +34,5 @@ jobs:
           file: Dockerfile.agent
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+            ${{ env.REGISTRY }}/alloeth/${{ env.IMAGE_NAME }}:latest
+            ${{ env.REGISTRY }}/alloeth/${{ env.IMAGE_NAME }}:${{ github.sha }}
