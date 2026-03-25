@@ -29,7 +29,6 @@ export async function GET(
       name: agents.name,
       status: agents.status,
       coolifyAppUuid: agents.coolifyAppUuid,
-      coolifyDomain: agents.coolifyDomain,
       webuiAuthToken: agents.webuiAuthToken,
       lastHealthCheck: agents.lastHealthCheck,
       lastError: agents.lastError,
@@ -57,7 +56,6 @@ export async function GET(
   const synced = await syncAgentFromCoolify(agent as typeof agentFields);
   if (synced) {
     agent.status = synced.status;
-    if (synced.coolifyDomain) agent.coolifyDomain = synced.coolifyDomain;
     if (synced.coolifyStatus) agent.coolifyStatus = synced.coolifyStatus;
     if (synced.health !== undefined) agent.healthStatus = synced.health;
     if (synced.lastError !== undefined) agent.lastError = synced.lastError;
@@ -144,19 +142,14 @@ export async function PATCH(
     dbUpdates.name = body.name;
     dbUpdates.slug = newSlug;
 
-    const baseDomain = process.env.AGENT_BASE_DOMAIN;
-    if (baseDomain) {
-      const newDomain = `https://${newSlug}.${baseDomain}`;
-      dbUpdates.coolifyDomain = newDomain;
-
-      if (agent.coolifyAppUuid) {
-        const coolify = getCoolifyClient();
-        await coolify.updateApplication(agent.coolifyAppUuid, {
-          name: newSlug,
-          domains: newDomain,
-        });
-        needsRedeploy = true;
-      }
+    if (agent.coolifyAppUuid) {
+      const coolify = getCoolifyClient();
+      const baseDomain = process.env.AGENT_BASE_DOMAIN;
+      await coolify.updateApplication(agent.coolifyAppUuid, {
+        name: newSlug,
+        ...(baseDomain ? { domains: `https://${newSlug}.${baseDomain}` } : {}),
+      });
+      needsRedeploy = true;
     }
   }
 

@@ -75,7 +75,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       fetch("/api/auth/tma/validate", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "ngrok-skip-browser-warning": "1",
+        },
         body: JSON.stringify({ initData: webApp.initData }),
       })
         .then(async (res) => {
@@ -92,11 +95,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
             setError(data.error || `Authentication failed (${res.status})`);
           }
         })
-        .catch((err) => setError(err.message || "Network error"))
+        .catch((err) => {
+          console.error("[AppProvider] TMA validate error:", err);
+          setError(err.message || "Network error");
+        })
         .finally(() => setLoading(false));
     } else {
       // Desktop flow: check existing session cookie
-      fetch("/api/auth/session")
+      fetch("/api/auth/session", {
+        headers: { "ngrok-skip-browser-warning": "1" },
+      })
         .then(async (res) => {
           if (res.ok) {
             const data = await res.json();
@@ -111,11 +119,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
               return;
             }
           }
-          // Not authenticated — redirect to landing
-          window.location.href = "/";
+          // Not authenticated — show login prompt instead of redirect loop
+          setError("not_authenticated");
         })
-        .catch(() => {
-          window.location.href = "/";
+        .catch((err) => {
+          console.error("[AppProvider] Session check error:", err);
+          setError("not_authenticated");
         })
         .finally(() => setLoading(false));
     }
@@ -137,6 +146,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
         </div>
       </div>
     );
+  }
+
+  if (error === "not_authenticated") {
+    // Desktop user not logged in — redirect to landing to connect wallet
+    if (typeof window !== "undefined") {
+      window.location.href = "/";
+    }
+    return null;
   }
 
   if (error) {

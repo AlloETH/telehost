@@ -82,13 +82,11 @@ interface AgentForSync {
   id: string;
   status: string;
   coolifyAppUuid: string | null;
-  coolifyDomain: string | null;
   lastError?: string | null;
 }
 
 export interface SyncResult {
   status: string;
-  coolifyDomain: string | null;
   coolifyStatus?: string; // raw status from Coolify
   health?: string | null; // parsed health component (healthy/unhealthy)
   deploymentStatus?: string; // queued | in_progress | finished | failed
@@ -139,8 +137,6 @@ export async function syncAgentFromCoolify(
       }
     }
 
-    const fqdn = app.fqdn ? String(app.fqdn) : null;
-
     const updates: Record<string, unknown> = {
       lastHealthCheck: new Date(),
       updatedAt: new Date(),
@@ -149,11 +145,6 @@ export async function syncAgentFromCoolify(
 
     if (mappedStatus !== agent.status) {
       updates.status = mappedStatus;
-      changed = true;
-    }
-
-    if (fqdn && fqdn !== agent.coolifyDomain) {
-      updates.coolifyDomain = fqdn;
       changed = true;
     }
 
@@ -179,7 +170,6 @@ export async function syncAgentFromCoolify(
 
     return {
       status: mappedStatus,
-      coolifyDomain: fqdn || agent.coolifyDomain,
       coolifyStatus: rawStatus || undefined,
       health,
       deploymentStatus: deploymentStatus || undefined,

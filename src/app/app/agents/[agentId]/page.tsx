@@ -11,11 +11,10 @@ import {
   ScrollText,
   Loader2,
   AlertTriangle,
-  Globe,
+  MessageSquare,
   Bot,
   Timer,
   KeyRound,
-  ExternalLink,
   Heart,
   Settings,
   Save,
@@ -30,7 +29,6 @@ interface Agent {
   id: string;
   name: string;
   status: string;
-  coolifyDomain: string | null;
   coolifyStatus?: string;
   healthStatus?: string | null;
   webuiAuthToken: string | null;
@@ -238,17 +236,19 @@ export default function TMAAgentDetailPage({
         )}
       </div>
 
-      {/* Open Control UI button */}
-      {agent.coolifyDomain && agent.status === "running" && (
-        <a
-          href={agent.coolifyDomain.startsWith("http") ? agent.coolifyDomain : `https://${agent.coolifyDomain}`}
-          target="_blank"
-          rel="noopener noreferrer"
+
+      {/* Chat button */}
+      {agent.status === "running" && (
+        <button
+          onClick={() => {
+            haptic.impact("medium");
+            router.push(`/app/agents/${agentId}/chat`);
+          }}
           className="mb-4 w-full flex items-center justify-center gap-2 rounded-xl bg-[var(--primary)] text-white p-3.5 text-sm font-medium active:opacity-80 transition-opacity"
         >
-          <ExternalLink className="h-4 w-4" />
-          Open Control UI
-        </a>
+          <MessageSquare className="h-4 w-4" />
+          Chat with Agent
+        </button>
       )}
 
       {/* Actions */}
@@ -332,24 +332,6 @@ export default function TMAAgentDetailPage({
                 </>
               )}
             </div>
-          </div>
-        )}
-
-        {agent.coolifyDomain && (
-          <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-3">
-            <div className="flex items-center gap-2">
-              <Globe className="h-4 w-4 text-[var(--muted-foreground)]" />
-              <span className="text-xs text-[var(--muted-foreground)]">Domain</span>
-            </div>
-            <a
-              href={agent.coolifyDomain.startsWith("http") ? agent.coolifyDomain : `https://${agent.coolifyDomain}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-1 inline-flex items-center gap-1 text-sm text-[var(--primary)]"
-            >
-              {agent.coolifyDomain}
-              <ExternalLink className="h-3 w-3" />
-            </a>
           </div>
         )}
 

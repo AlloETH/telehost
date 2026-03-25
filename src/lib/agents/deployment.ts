@@ -52,14 +52,34 @@ export async function updateAgentEnvVars(agentId: string): Promise<void> {
   if (agent.configEncrypted && agent.configIv && agent.configTag) {
     const [tag, salt] = agent.configTag.split(":");
     const configJson = decrypt({ ciphertext: agent.configEncrypted, iv: agent.configIv, tag, salt });
-    configB64 = Buffer.from(configJson).toString("base64");
 
     try {
       const parsed = JSON.parse(configJson);
-      provider = parsed.models?.default?.provider || "";
       apiKey = parsed._apiKey || "";
+      // Extract provider from model string like "anthropic/claude-opus-4-6"
+      const modelStr = parsed.agents?.defaults?.model?.primary || "";
+      provider = modelStr.split("/")[0] || "";
+      // Strip internal fields before sending to container
+      delete parsed._apiKey;
+      // Ensure gateway defaults are present (covers configs stored before these fields existed)
+      const storedGw = parsed.gateway || {};
+      parsed.gateway = {
+        ...storedGw,
+        mode: "local",
+        port: storedGw.port || 18789,
+        bind: storedGw.bind || "lan",
+        auth: { mode: "token" },
+        controlUi: { enabled: false },
+        http: {
+          endpoints: {
+            chatCompletions: { enabled: true },
+            responses: { enabled: true },
+          },
+        },
+      };
+      configB64 = Buffer.from(JSON.stringify(parsed)).toString("base64");
     } catch {
-      // Config parsing failed
+      configB64 = Buffer.from(configJson).toString("base64");
     }
   }
 
@@ -87,6 +107,7 @@ export interface CreateAgentInput {
  */
 export async function createAgent(input: CreateAgentInput): Promise<string> {
   const { userId, name, config } = input;
+  console.log("[createAgent] START", { userId, name });
 
   // 1. Validate subscription capacity
   const sub = await db
@@ -97,9 +118,11 @@ export async function createAgent(input: CreateAgentInput): Promise<string> {
     )
     .limit(1);
 
+  console.log("[createAgent] sub query done", sub.length);
   const hasActiveSubscription = sub.length > 0;
+  const isDev = process.env.NODE_ENV === "development";
 
-  if (!hasActiveSubscription) {
+  if (!hasActiveSubscription && !isDev) {
     const existingAgents = await db
       .select({ id: agents.id })
       .from(agents)
@@ -129,8 +152,9 @@ export async function createAgent(input: CreateAgentInput): Promise<string> {
     throw new Error(`Name "${name}" is already taken. Choose a different name.`);
   }
 
+  // Coolify domain for internal reverse-proxy routing (never exposed to users)
   const baseDomain = process.env.AGENT_BASE_DOMAIN;
-  const agentDomain = baseDomain ? `https://${slug}.${baseDomain}` : undefined;
+  const routingDomain = baseDomain ? `https://${slug}.${baseDomain}` : undefined;
 
   // 3. Generate OpenClaw config and encrypt it
   const { configJson, gatewayToken } = generateOpenClawConfig(config);
@@ -142,7 +166,7 @@ export async function createAgent(input: CreateAgentInput): Promise<string> {
   const encryptedConfig = encrypt(configToStore);
 
   // 4. Create agent record in DB
-  const trialEndsAt = hasActiveSubscription
+  const trialEndsAt = hasActiveSubscription || isDev
     ? null
     : new Date(Date.now() + 60 * 60 * 1000);
 
@@ -156,7 +180,6 @@ export async function createAgent(input: CreateAgentInput): Promise<string> {
       name,
       slug,
       status: "provisioning",
-      coolifyDomain: agentDomain || null,
       webuiAuthToken: gatewayToken,
       configEncrypted: encryptedConfig.ciphertext,
       configIv: encryptedConfig.iv,
@@ -165,10 +188,12 @@ export async function createAgent(input: CreateAgentInput): Promise<string> {
     })
     .returning();
 
+  console.log("[createAgent] DB insert done, agentId:", agent.id);
+
   // 5. Kick off async provisioning (don't await — return immediately)
   provisionAgent(agent.id, {
     slug,
-    agentDomain,
+    routingDomain,
     tier,
     configJson,
     gatewayToken,
@@ -185,6 +210,7 @@ export async function createAgent(input: CreateAgentInput): Promise<string> {
       .catch(console.error);
   });
 
+  console.log("[createAgent] returning agentId:", agent.id);
   return agent.id;
 }
 
@@ -193,7 +219,7 @@ async function provisionAgent(
   agentId: string,
   opts: {
     slug: string;
-    agentDomain: string | undefined;
+    routingDomain: string | undefined;
     tier: SubscriptionTier;
     configJson: string;
     gatewayToken: string;
@@ -213,7 +239,7 @@ async function provisionAgent(
     docker_registry_image_tag: OPENCLAW_DOCKER_TAG,
     ports_exposes: OPENCLAW_GATEWAY_PORT,
     name: opts.slug,
-    domains: opts.agentDomain,
+    domains: opts.routingDomain,
     instant_deploy: false,
     limits_memory: `${tierConfig.memoryLimitMb}M`,
     limits_cpus: tierConfig.cpuLimit,

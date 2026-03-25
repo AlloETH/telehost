@@ -49,19 +49,23 @@ export function generateOpenClawConfig(config: OpenClawConfig): {
   const gatewayToken = randomBytes(32).toString("hex");
 
   const openclawConfig: Record<string, unknown> = {
-    models: {
-      default: {
-        provider: mapProvider(config.provider),
-        model: config.model,
+    agents: {
+      defaults: {
+        model: { primary: `${mapProvider(config.provider)}/${config.model}` },
+        sandbox: { mode: "off" },
       },
     },
     gateway: {
+      mode: "local",
       port: 18789,
       bind: "lan",
-    },
-    agents: {
-      defaults: {
-        sandbox: { mode: "off" },
+      auth: { mode: "token" },
+      controlUi: { enabled: false },
+      http: {
+        endpoints: {
+          chatCompletions: { enabled: true },
+          responses: { enabled: true },
+        },
       },
     },
   };

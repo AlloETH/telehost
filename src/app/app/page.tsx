@@ -28,13 +28,14 @@ export default function HomePage() {
 
   useEffect(() => {
     Promise.all([
-      fetch("/api/agents").then((r) => r.json()),
+      fetch("/api/agents").then((r) => r.json()).catch(() => ({ agents: [] })),
       fetch("/api/billing/status").then((r) => r.json()).catch(() => null),
     ])
       .then(([agentsData, billingData]) => {
-        setAgents(agentsData.agents || []);
+        setAgents(agentsData?.agents || []);
         if (billingData) setBilling(billingData);
       })
+      .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
 

@@ -29,7 +29,6 @@ export async function GET(req: NextRequest) {
       name: agents.name,
       status: agents.status,
       coolifyAppUuid: agents.coolifyAppUuid,
-      coolifyDomain: agents.coolifyDomain,
       lastHealthCheck: agents.lastHealthCheck,
       lastError: agents.lastError,
       createdAt: agents.createdAt,
@@ -39,12 +38,19 @@ export async function GET(req: NextRequest) {
     .where(eq(agents.userId, userId))
     .orderBy(agents.createdAt);
 
-  // Sync status from Coolify for all agents in parallel
+  // Sync status from Coolify for all agents in parallel (with timeout)
   const synced = await Promise.all(
     userAgents.map(async (agent) => {
-      const result = await syncAgentFromCoolify(agent);
-      if (result) {
-        return { ...agent, status: result.status, coolifyDomain: result.coolifyDomain || agent.coolifyDomain };
+      try {
+        const result = await Promise.race([
+          syncAgentFromCoolify(agent),
+          new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000)),
+        ]);
+        if (result) {
+          return { ...agent, status: result.status };
+        }
+      } catch {
+        // Coolify unreachable — return cached status
       }
       return agent;
     }),

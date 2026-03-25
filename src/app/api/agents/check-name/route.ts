@@ -33,6 +33,5 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     available: existing.length === 0,
     slug,
-    domain: `${slug}.${process.env.AGENT_BASE_DOMAIN || "localhost"}`,
   });
 }

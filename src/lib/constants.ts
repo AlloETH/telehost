@@ -31,6 +31,19 @@ export const OPENCLAW_DOCKER_IMAGE = "ghcr.io/alloeth/telehost-agent";
 export const OPENCLAW_DOCKER_TAG = "latest";
 export const OPENCLAW_GATEWAY_PORT = "18789";
 
+/**
+ * Internal URL to reach an agent's OpenClaw gateway.
+ * - Production (Docker): uses Docker DNS  → http://<slug>:18789
+ * - Development: routes via Coolify reverse proxy → https://<slug>.<AGENT_BASE_DOMAIN>
+ */
+export function agentInternalUrl(slug: string): string {
+  const baseDomain = process.env.AGENT_BASE_DOMAIN;
+  if (baseDomain) {
+    return `https://${slug}.${baseDomain}`;
+  }
+  return `http://${slug}:${OPENCLAW_GATEWAY_PORT}`;
+}
+
 export const AGENT_MAX_RESTART_ATTEMPTS = 3;
 export const HEALTH_CHECK_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 export const SUBSCRIPTION_GRACE_PERIOD_DAYS = 3;
