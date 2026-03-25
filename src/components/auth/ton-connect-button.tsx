@@ -6,6 +6,7 @@ import {
   useTonAddress,
 } from "@tonconnect/ui-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { apiFetch } from "@/lib/api";
 
 export function TonConnectAuthButton() {
   const [tonConnectUI] = useTonConnectUI();
@@ -16,7 +17,7 @@ export function TonConnectAuthButton() {
 
   const handleConnect = useCallback(async () => {
     // Fetch challenge payload from our backend
-    const res = await fetch("/api/auth/ton-proof/payload");
+    const res = await apiFetch("/auth/ton-proof/payload");
     const { payload } = await res.json();
 
     // Set the proof payload before connecting
@@ -38,7 +39,7 @@ export function TonConnectAuthButton() {
     if (!freshConnect.current) {
       // Wallet was restored from localStorage, not a fresh connect.
       // Check if we already have a session; if so, redirect.
-      fetch("/api/auth/session")
+      apiFetch("/auth/session")
         .then((res) => {
           if (res.ok) window.location.href = "/dashboard";
         })
@@ -52,7 +53,7 @@ export function TonConnectAuthButton() {
 
     setIsAuthenticating(true);
 
-    fetch("/api/auth/ton-proof/verify", {
+    apiFetch("/auth/ton-proof/verify", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

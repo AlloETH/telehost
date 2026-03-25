@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Bot, Wallet, ChevronRight } from "lucide-react";
 import { useApp } from "@/components/app-provider";
 import { useTelegramHaptic } from "@/lib/hooks/use-telegram";
+import { apiFetch } from "@/lib/api";
 
 interface Agent {
   id: string;
@@ -28,8 +29,8 @@ export default function HomePage() {
 
   useEffect(() => {
     Promise.all([
-      fetch("/api/agents").then((r) => r.json()).catch(() => ({ agents: [] })),
-      fetch("/api/billing/status").then((r) => r.json()).catch(() => null),
+      apiFetch("/agents").then((r) => r.json()).catch(() => ({ agents: [] })),
+      apiFetch("/billing/status").then((r) => r.json()).catch(() => null),
     ])
       .then(([agentsData, billingData]) => {
         setAgents(agentsData?.agents || []);

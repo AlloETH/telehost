@@ -13,7 +13,7 @@ async function bootstrap() {
     credentials: true,
   });
 
-  const port = process.env.PORT || 4000;
+  const port = process.env.PORT || 3000;
   await app.listen(port);
   console.log(`[api] listening on http://0.0.0.0:${port}`);
 }

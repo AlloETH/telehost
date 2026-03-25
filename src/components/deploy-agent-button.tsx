@@ -2,6 +2,7 @@
 
 import { useTonConnectUI, useTonWallet } from "@tonconnect/ui-react";
 import { useCallback, useEffect, useRef } from "react";
+import { apiFetch } from "@/lib/api";
 
 export function DeployAgentButton({
   className,
@@ -26,7 +27,7 @@ export function DeployAgentButton({
     const target = pendingRedirect.current;
     pendingRedirect.current = null;
 
-    fetch("/api/auth/ton-proof/verify", {
+    apiFetch("/auth/ton-proof/verify", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -51,13 +52,13 @@ export function DeployAgentButton({
   const handleClick = useCallback(async () => {
     if (wallet) {
       // Already connected - check session and navigate
-      const res = await fetch("/api/auth/session");
+      const res = await apiFetch("/auth/session");
       if (res.ok) {
         window.location.href = href;
       } else {
         // Wallet connected but no session - re-auth
         pendingRedirect.current = href;
-        const payloadRes = await fetch("/api/auth/ton-proof/payload");
+        const payloadRes = await apiFetch("/auth/ton-proof/payload");
         const { payload } = await payloadRes.json();
         tonConnectUI.setConnectRequestParameters({
           state: "ready",
@@ -71,7 +72,7 @@ export function DeployAgentButton({
 
     // Not connected - trigger wallet connect, then redirect after auth
     pendingRedirect.current = href;
-    const res = await fetch("/api/auth/ton-proof/payload");
+    const res = await apiFetch("/auth/ton-proof/payload");
     const { payload } = await res.json();
     tonConnectUI.setConnectRequestParameters({
       state: "ready",

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, use } from "react";
 import Link from "next/link";
+import { apiFetch } from "@/lib/api";
 
 export default function AgentLogsPage({
   params,
@@ -16,7 +17,7 @@ export default function AgentLogsPage({
   const [tail, setTail] = useState(100);
 
   const fetchLogs = () => {
-    fetch(`/api/agents/${agentId}/logs?tail=${tail}`)
+    apiFetch(`/agents/${agentId}/logs?tail=${tail}`)
       .then((r) => r.json())
       .then((data) => {
         setLogs(data.logs || data.error || "No logs available");

@@ -9,6 +9,7 @@ import {
   useTelegramHaptic,
 } from "@/lib/hooks/use-telegram";
 import { useApp } from "@/components/app-provider";
+import { apiFetch } from "@/lib/api";
 
 interface ProviderModel {
   value: string;
@@ -193,7 +194,7 @@ export default function TMADeployPage() {
     }
     setNameStatus((prev) => ({ ...prev, checking: true }));
     try {
-      const res = await fetch(`/api/agents/check-name?name=${encodeURIComponent(name)}`);
+      const res = await apiFetch(`/agents/check-name?name=${encodeURIComponent(name)}`);
       const data = await res.json();
       setNameStatus({ checking: false, available: data.available, slug: data.slug || "" });
     } catch {
@@ -210,7 +211,7 @@ export default function TMADeployPage() {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch("/api/agents", {
+      const res = await apiFetch("/agents", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

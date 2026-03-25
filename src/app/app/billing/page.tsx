@@ -7,6 +7,7 @@ import { SUBSCRIPTION_TIERS } from "@/lib/constants";
 import { useApp } from "@/components/app-provider";
 import { useTelegramBackButton, useTelegramHaptic } from "@/lib/hooks/use-telegram";
 import { useRouter } from "next/navigation";
+import { apiFetch } from "@/lib/api";
 
 interface Subscription {
   tier: string;
@@ -40,7 +41,7 @@ export default function TMABillingPage() {
   const needsWallet = walletAddress?.startsWith("tma_");
 
   useEffect(() => {
-    fetch("/api/billing/status")
+    apiFetch("/billing/status")
       .then((r) => r.json())
       .then((data) => {
         setSubscription(data.subscription);
@@ -66,7 +67,7 @@ export default function TMABillingPage() {
     haptic.impact("medium");
     setPaying(tier);
     try {
-      const res = await fetch("/api/billing/subscribe", {
+      const res = await apiFetch("/billing/subscribe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tier, senderAddress: tonAddress }),
@@ -90,7 +91,7 @@ export default function TMABillingPage() {
         ],
       });
 
-      const verifyRes = await fetch("/api/billing/verify-payment", {
+      const verifyRes = await apiFetch("/billing/verify-payment", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ paymentId }),
@@ -98,7 +99,7 @@ export default function TMABillingPage() {
 
       if (verifyRes.ok) {
         haptic.notification("success");
-        const statusRes = await fetch("/api/billing/status");
+        const statusRes = await apiFetch("/billing/status");
         const statusData = await statusRes.json();
         setSubscription(statusData.subscription);
         setPayments(statusData.payments || []);

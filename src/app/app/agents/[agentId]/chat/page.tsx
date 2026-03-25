@@ -13,6 +13,7 @@ import {
   X,
 } from "lucide-react";
 import { useTelegramBackButton } from "@/lib/hooks/use-telegram";
+import { apiFetch } from "@/lib/api";
 
 interface Session {
   key: string;
@@ -26,13 +27,6 @@ interface ChatMessage {
   content: string;
 }
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
-
-function apiUrl(path: string): string {
-  return `${API_BASE}${path}`;
-}
-
-const fetchOpts: RequestInit = { credentials: "include" };
 
 export default function ChatPage({
   params,
@@ -66,7 +60,7 @@ export default function ChatPage({
   // Fetch sessions
   const fetchSessions = useCallback(async () => {
     try {
-      const res = await fetch(apiUrl(`/agents/${agentId}/sessions`), fetchOpts);
+      const res = await apiFetch(`/agents/${agentId}/sessions`);
       if (res.ok) {
         const data = await res.json();
         setSessions(data.sessions || []);
@@ -89,10 +83,7 @@ export default function ChatPage({
       return;
     }
     setLoadingHistory(true);
-    fetch(
-      apiUrl(`/agents/${agentId}/sessions/${encodeURIComponent(activeSession)}/history`),
-      fetchOpts,
-    )
+    apiFetch(`/agents/${agentId}/sessions/${encodeURIComponent(activeSession)}/history`)
       .then((r) => r.json())
       .then((data) => {
         const msgs: ChatMessage[] = (data.messages || []).map(
@@ -115,10 +106,9 @@ export default function ChatPage({
   // Create new session
   const createNewSession = async () => {
     try {
-      const res = await fetch(apiUrl(`/agents/${agentId}/sessions`), {
+      const res = await apiFetch(`/agents/${agentId}/sessions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
         body: JSON.stringify({}),
       });
       if (res.ok) {
@@ -137,10 +127,9 @@ export default function ChatPage({
   const deleteSessionHandler = async (key: string, e: React.MouseEvent) => {
     e.stopPropagation();
     try {
-      await fetch(
-        apiUrl(`/agents/${agentId}/sessions/${encodeURIComponent(key)}`),
-        { method: "DELETE", credentials: "include" },
-      );
+      await apiFetch(`/agents/${agentId}/sessions/${encodeURIComponent(key)}`, {
+        method: "DELETE",
+      });
       if (activeSession === key) {
         setActiveSession(null);
         setMessages([]);
@@ -166,10 +155,9 @@ export default function ChatPage({
     let sessionKey = activeSession;
     if (!sessionKey) {
       try {
-        const res = await fetch(apiUrl(`/agents/${agentId}/sessions`), {
+        const res = await apiFetch(`/agents/${agentId}/sessions`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          credentials: "include",
           body: JSON.stringify({}),
         });
         if (res.ok) {
@@ -188,9 +176,8 @@ export default function ChatPage({
     setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
 
     try {
-      const res = await fetch(apiUrl(`/agents/${agentId}/chat`), {
+      const res = await apiFetch(`/agents/${agentId}/chat`, {
         method: "POST",
-        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           sessionKey,

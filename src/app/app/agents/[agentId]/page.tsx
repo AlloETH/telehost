@@ -24,6 +24,7 @@ import {
   Check,
 } from "lucide-react";
 import { useTelegramBackButton, useTelegramHaptic } from "@/lib/hooks/use-telegram";
+import { apiFetch } from "@/lib/api";
 
 interface Agent {
   id: string;
@@ -72,7 +73,7 @@ export default function TMAAgentDetailPage({
   useTelegramBackButton(() => router.push("/app"));
 
   const fetchAgent = useCallback(() => {
-    fetch(`/api/agents/${agentId}`)
+    apiFetch(`/agents/${agentId}`)
       .then((r) => r.json())
       .then((data) => setAgent(data.agent))
       .finally(() => setLoading(false));
@@ -95,7 +96,7 @@ export default function TMAAgentDetailPage({
     haptic.impact("medium");
     setActionLoading(action);
     try {
-      await fetch(`/api/agents/${agentId}/${action}`, { method: "POST" });
+      await apiFetch(`/agents/${agentId}/${action}`, { method: "POST" });
       setTimeout(fetchAgent, 1000);
     } finally {
       setActionLoading("");
@@ -118,7 +119,7 @@ export default function TMAAgentDetailPage({
     haptic.notification("warning");
     setActionLoading("delete");
     try {
-      await fetch(`/api/agents/${agentId}`, { method: "DELETE" });
+      await apiFetch(`/agents/${agentId}`, { method: "DELETE" });
       router.push("/app");
     } finally {
       setActionLoading("");
@@ -174,7 +175,7 @@ export default function TMAAgentDetailPage({
         setSettingsLoading(false);
         return;
       }
-      const res = await fetch(`/api/agents/${agentId}`, {
+      const res = await apiFetch(`/agents/${agentId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),

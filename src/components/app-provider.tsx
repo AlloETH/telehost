@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import { TonConnectUIProvider } from "@tonconnect/ui-react";
+import { apiFetch } from "@/lib/api";
 
 interface AppContextValue {
   isReady: boolean;
@@ -73,7 +74,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (tp.link_color) root.style.setProperty("--ring", tp.link_color);
       if (tp.section_separator_color) root.style.setProperty("--border", tp.section_separator_color);
 
-      fetch("/api/auth/tma/validate", {
+      apiFetch("/auth/tma/validate", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -102,7 +103,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         .finally(() => setLoading(false));
     } else {
       // Desktop flow: check existing session cookie
-      fetch("/api/auth/session", {
+      apiFetch("/auth/session", {
         headers: { "ngrok-skip-browser-warning": "1" },
       })
         .then(async (res) => {
