@@ -20,7 +20,13 @@ export class ChatController {
       return;
     }
 
-    const client = await this.oc.resolveClient(agentId, user.userId);
+    let client: Awaited<ReturnType<OpenclawService["resolveClient"]>>;
+    try {
+      client = await this.oc.resolveClient(agentId, user.userId);
+    } catch (err: any) {
+      console.error("[chat] resolveClient error:", err.message);
+      throw err;
+    }
 
     const gwHeaders: Record<string, string> = {
       ...this.oc.headers(client),
@@ -35,11 +41,19 @@ export class ChatController {
     };
     if (body.model) payload.model = body.model;
 
-    const gwRes = await fetch(`${client.baseUrl}/v1/chat/completions`, {
-      method: "POST",
-      headers: gwHeaders,
-      body: JSON.stringify(payload),
-    });
+    let gwRes: globalThis.Response;
+    try {
+      console.log(`[chat] POST ${client.baseUrl}/v1/chat/completions`);
+      gwRes = await fetch(`${client.baseUrl}/v1/chat/completions`, {
+        method: "POST",
+        headers: gwHeaders,
+        body: JSON.stringify(payload),
+      });
+    } catch (err: any) {
+      console.error("[chat] gateway fetch error:", err.message, err.cause);
+      res.status(502).json({ error: "Cannot reach agent gateway", detail: err.message });
+      return;
+    }
 
     if (!gwRes.ok) {
       const text = await gwRes.text().catch(() => "");
