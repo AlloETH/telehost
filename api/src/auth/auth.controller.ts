@@ -20,8 +20,15 @@ async function createSessionToken(payload: { userId: string; walletAddress: stri
   return new SignJWT(payload as any).setProtectedHeader({ alg: "HS256" }).setIssuedAt().setExpirationTime(`${SESSION_MAX_AGE}s`).sign(getJwtSecret());
 }
 
-function setCookie(res: Response, token: string, sameSite: "strict" | "none" = "none") {
-  res.cookie(SESSION_COOKIE, token, { httpOnly: true, secure: true, sameSite, maxAge: SESSION_MAX_AGE * 1000, path: "/" });
+function setCookie(res: Response, token: string) {
+  const isProduction = process.env.NODE_ENV === "production";
+  res.cookie(SESSION_COOKIE, token, {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: "none",
+    maxAge: SESSION_MAX_AGE * 1000,
+    path: "/",
+  });
 }
 
 @Controller("auth")
@@ -84,7 +91,7 @@ export class AuthController {
     }
 
     const token = await createSessionToken({ userId, walletAddress });
-    setCookie(res, token, "none");
+    setCookie(res, token);
     res.json({ success: true, userId, walletAddress, telegramUser: { id: tgUser.id, firstName: tgUser.first_name, lastName: tgUser.last_name, username: tgUser.username, isPremium: tgUser.is_premium, photoUrl: tgUser.photo_url } });
   }
 
@@ -113,7 +120,7 @@ export class AuthController {
 
     await this.db.update(users).set({ walletAddress: friendly, walletAddressRaw: raw, updatedAt: new Date() }).where(eq(users.id, user.userId));
     const newToken = await createSessionToken({ userId: user.userId, walletAddress: friendly });
-    setCookie(res, newToken, "none");
+    setCookie(res, newToken);
     res.json({ success: true, walletAddress: friendly });
   }
 
@@ -156,7 +163,7 @@ export class AuthController {
     }
 
     const token = await createSessionToken({ userId, walletAddress: friendly });
-    setCookie(res, token, "strict");
+    setCookie(res, token);
     res.json({ success: true, userId, walletAddress: friendly });
   }
 
@@ -177,7 +184,9 @@ export class AuthController {
     if (proof.payload !== expectedPayload) return { valid: false, reason: "payload_mismatch" };
     const now = Math.floor(Date.now() / 1000);
     if (Math.abs(now - proof.timestamp) > 900) return { valid: false, reason: "timestamp_expired" };
-    if (process.env.NODE_ENV !== "development" && proof.domain.value !== appDomain) return { valid: false, reason: "domain_mismatch" };
+    // Compare against the frontend domain (from CORS_ORIGIN or APP_DOMAIN), not the API host
+    const allowedDomains = (process.env.CORS_ORIGIN || process.env.NEXT_PUBLIC_APP_URL || "").split(",").map((u) => { try { return new URL(u.trim()).hostname; } catch { return u.trim(); } });
+    if (allowedDomains.length > 0 && !allowedDomains.includes(proof.domain.value) && proof.domain.value !== appDomain) return { valid: false, reason: "domain_mismatch" };
 
     let publicKey: Uint8Array | null = walletInfo.publicKey ? Buffer.from(walletInfo.publicKey, "hex") : null;
     if (!publicKey || publicKey.length !== 32) {
