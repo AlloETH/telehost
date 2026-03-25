@@ -94,6 +94,7 @@ export class AgentsService {
     const [agent] = await this.db.insert(agents).values({
       userId, name, slug,
       status: "provisioning",
+      coolifyDomain: routingDomain || null,
       webuiAuthToken: gatewayToken,
       configEncrypted: encrypted.ciphertext,
       configIv: encrypted.iv,
