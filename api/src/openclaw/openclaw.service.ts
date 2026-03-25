@@ -19,6 +19,8 @@ export class OpenclawService {
       .select({
         id: agents.id,
         slug: agents.slug,
+        coolifyAppUuid: agents.coolifyAppUuid,
+        coolifyDomain: agents.coolifyDomain,
         status: agents.status,
         webuiAuthToken: agents.webuiAuthToken,
       })
@@ -33,10 +35,19 @@ export class OpenclawService {
     if (!agent.webuiAuthToken)
       throw new Error("Agent has no gateway token");
 
-    return {
-      baseUrl: `http://${agent.slug}:${GATEWAY_PORT}`,
-      token: agent.webuiAuthToken,
-    };
+    // Resolve internal URL: try coolifyDomain (reverse proxy), then Docker DNS by UUID, then by slug
+    let baseUrl: string;
+    if (agent.coolifyDomain) {
+      baseUrl = agent.coolifyDomain.startsWith("http") ? agent.coolifyDomain : `https://${agent.coolifyDomain}`;
+    } else if (agent.coolifyAppUuid) {
+      baseUrl = `http://${agent.coolifyAppUuid}:${GATEWAY_PORT}`;
+    } else {
+      baseUrl = `http://${agent.slug}:${GATEWAY_PORT}`;
+    }
+
+    console.log(`[openclaw] resolved ${agent.slug} → ${baseUrl}`);
+
+    return { baseUrl, token: agent.webuiAuthToken };
   }
 
   headers(client: GatewayClient): Record<string, string> {
