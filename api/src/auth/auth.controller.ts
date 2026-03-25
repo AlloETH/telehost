@@ -21,10 +21,9 @@ async function createSessionToken(payload: { userId: string; walletAddress: stri
 }
 
 function setCookie(res: Response, token: string) {
-  const isProduction = process.env.NODE_ENV === "production";
   res.cookie(SESSION_COOKIE, token, {
     httpOnly: true,
-    secure: isProduction,
+    secure: true,
     sameSite: "none",
     maxAge: SESSION_MAX_AGE * 1000,
     path: "/",
