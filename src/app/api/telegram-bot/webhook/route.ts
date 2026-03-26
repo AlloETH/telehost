@@ -22,20 +22,26 @@ export async function POST(req: NextRequest) {
   if (update.message?.text === "/start") {
     const chatId = update.message.chat.id;
     const name = update.message.from?.first_name || "there";
-    const appUrl = `${process.env.NEXT_PUBLIC_APP_URL}/tma`;
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL;
 
     await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         chat_id: chatId,
-        text: `Hey ${name}!\n\nManage your Telehost agents, deploy new bots, and handle billing, all from right here in Telegram.`,
+        text: `Hey ${name}!\n\nDeploy and manage your OpenClaw AI agents right here in Telegram. One tap to get started.`,
         reply_markup: {
           inline_keyboard: [
             [
               {
-                text: "Open Telehost",
-                web_app: { url: appUrl },
+                text: "Deploy OpenClaw",
+                web_app: { url: `${baseUrl}/app/deploy` },
+              },
+            ],
+            [
+              {
+                text: "My Agents",
+                web_app: { url: `${baseUrl}/app` },
               },
             ],
           ],

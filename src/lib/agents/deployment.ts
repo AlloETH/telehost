@@ -180,6 +180,7 @@ export async function createAgent(input: CreateAgentInput): Promise<string> {
       name,
       slug,
       status: "provisioning",
+      coolifyDomain: routingDomain,
       webuiAuthToken: gatewayToken,
       configEncrypted: encryptedConfig.ciphertext,
       configIv: encryptedConfig.iv,
@@ -198,12 +199,21 @@ export async function createAgent(input: CreateAgentInput): Promise<string> {
     configJson,
     gatewayToken,
     config,
-  }).catch((err) => {
+  }).catch(async (err) => {
     console.error(`[provision] Failed for agent ${agent.id}:`, err);
+    // Fetch current step for better error context
+    const [current] = await db
+      .select({ provisioningStep: agents.provisioningStep })
+      .from(agents)
+      .where(eq(agents.id, agent.id))
+      .limit(1)
+      .catch(() => [{ provisioningStep: null }]);
+    const step = current?.provisioningStep || "unknown";
+    const detail = err instanceof Error ? err.message : "Provisioning failed";
     db.update(agents)
       .set({
         status: "error",
-        lastError: err instanceof Error ? err.message : "Provisioning failed",
+        lastError: `Failed at step "${step}": ${detail}`,
         updatedAt: new Date(),
       })
       .where(eq(agents.id, agent.id))
@@ -212,6 +222,41 @@ export async function createAgent(input: CreateAgentInput): Promise<string> {
 
   console.log("[createAgent] returning agentId:", agent.id);
   return agent.id;
+}
+
+/** Retry an async operation up to `retries` times on 5xx errors. */
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  retries: number = 2,
+  delayMs: number = 2000,
+): Promise<T> {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      const is5xx =
+        err instanceof Error &&
+        "statusCode" in err &&
+        (err as { statusCode: number }).statusCode >= 500;
+      if (attempt < retries && is5xx) {
+        await new Promise((r) => setTimeout(r, delayMs));
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw new Error("Retry exhausted");
+}
+
+/** Update the provisioning step in the DB for real-time progress tracking. */
+async function setProvisioningStep(
+  agentId: string,
+  step: string,
+): Promise<void> {
+  await db
+    .update(agents)
+    .set({ provisioningStep: step, updatedAt: new Date() })
+    .where(eq(agents.id, agentId));
 }
 
 /** Async provisioning: creates Coolify app, sets env vars, starts container */
@@ -229,8 +274,9 @@ async function provisionAgent(
   const tierConfig = SUBSCRIPTION_TIERS[opts.tier];
   const coolify = getCoolifyClient();
 
-  // Create Coolify Docker Image application
-  const coolifyApp = await coolify.createApplication({
+  // Step 1: Create Coolify Docker Image application
+  await setProvisioningStep(agentId, "creating_app");
+  const coolifyApp = await withRetry(() => coolify.createApplication({
     project_uuid: process.env.COOLIFY_PROJECT_UUID!,
     server_uuid: process.env.COOLIFY_SERVER_UUID!,
     environment_name: process.env.COOLIFY_ENVIRONMENT_NAME || "production",
@@ -250,7 +296,7 @@ async function provisionAgent(
     health_check_timeout: 10,
     health_check_retries: 3,
     health_check_start_period: 60,
-  });
+  }));
 
   // Save Coolify UUID
   await db
@@ -260,6 +306,9 @@ async function provisionAgent(
 
   // Wait for Coolify to index the app
   await waitForCoolifyApp(coolify, coolifyApp.uuid);
+
+  // Step 2: Configure environment and volumes
+  await setProvisioningStep(agentId, "configuring");
 
   // Add persistent volume
   await addPersistentVolume({
@@ -279,8 +328,9 @@ async function provisionAgent(
   });
   await coolify.bulkSetEnvVars(coolifyApp.uuid, envVars);
 
-  // Start the container
-  await coolify.startApplication(coolifyApp.uuid);
+  // Step 3: Start the container
+  await setProvisioningStep(agentId, "starting");
+  await withRetry(() => coolify.startApplication(coolifyApp.uuid));
   await db
     .update(agents)
     .set({ status: "starting", updatedAt: new Date() })

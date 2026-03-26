@@ -8,6 +8,7 @@ frontend:
     build:
       commands:
         - env | grep -E '^(DATABASE_URL|JWT_SECRET|ENCRYPTION_SECRET|COOLIFY_|AGENT_BASE_DOMAIN|TON_SERVICE_|TELEGRAM_BOT_TOKEN|NEXT_PUBLIC_)' >> .env.production
+        - npm run db:migrate
         - npm run build
   artifacts:
     baseDirectory: .next

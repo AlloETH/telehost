@@ -17,6 +17,7 @@ export async function resolveGatewayClient(
       slug: agents.slug,
       status: agents.status,
       webuiAuthToken: agents.webuiAuthToken,
+      coolifyDomain: agents.coolifyDomain,
     })
     .from(agents)
     .where(and(eq(agents.id, agentId), eq(agents.userId, userId)))
@@ -37,7 +38,7 @@ export async function resolveGatewayClient(
   }
 
   return {
-    client: createGatewayClient(agent.slug, agent.webuiAuthToken),
+    client: createGatewayClient(agent.slug, agent.webuiAuthToken, agent.coolifyDomain ?? undefined),
     agent: { id: agent.id, slug: agent.slug, status: agent.status },
   };
 }

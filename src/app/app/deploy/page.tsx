@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Clock, ExternalLink, ChevronDown, ChevronUp, ArrowLeft } from "lucide-react";
+import { ExternalLink, ChevronDown, ChevronUp, RefreshCw } from "lucide-react";
 import {
   useTelegramBackButton,
   useTelegramMainButton,
@@ -127,11 +127,31 @@ const LLM_PROVIDERS: LLMProvider[] = [
   },
 ];
 
+// Simple random name generator (matching server-side lists)
+const ADJECTIVES = [
+  "swift", "bright", "calm", "bold", "keen",
+  "wild", "cool", "fast", "wise", "warm",
+  "sharp", "pure", "deep", "fair", "grand",
+  "vivid", "noble", "rapid", "lucky", "agile",
+];
+
+const NOUNS = [
+  "falcon", "coral", "river", "spark", "cedar",
+  "tiger", "frost", "blaze", "orbit", "prism",
+  "lotus", "storm", "ember", "ridge", "comet",
+  "raven", "atlas", "nova", "pulse", "flint",
+];
+
+function randomName(): string {
+  const adj = ADJECTIVES[Math.floor(Math.random() * ADJECTIVES.length)];
+  const noun = NOUNS[Math.floor(Math.random() * NOUNS.length)];
+  return `${adj}-${noun}`;
+}
+
 export default function TMADeployPage() {
   const router = useRouter();
   const { isTMA } = useApp();
   const haptic = useTelegramHaptic();
-  const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [showChannels, setShowChannels] = useState(false);
@@ -143,7 +163,7 @@ export default function TMADeployPage() {
   }>({ checking: false, available: null, slug: "" });
 
   const [form, setForm] = useState({
-    name: "",
+    name: randomName(),
     provider: "anthropic",
     apiKey: "",
     model: "claude-sonnet-4-6",
@@ -158,31 +178,12 @@ export default function TMADeployPage() {
   const update = (field: string, value: string) =>
     setForm((prev) => ({ ...prev, [field]: value }));
 
-  // Back button navigates steps
-  useTelegramBackButton(
-    step > 1 ? () => setStep((s) => s - 1) : () => router.push("/app"),
-  );
+  useTelegramBackButton(() => router.push("/app"));
 
-  // Main button
-  const mainButtonText = step === 1 ? "Next" : "Deploy";
+  const canDeploy = !!form.name && !!form.apiKey && nameStatus.available !== false;
 
-  const canProceed = () => {
-    if (step === 1) return !!form.name && !!form.apiKey && nameStatus.available === true;
-    if (step === 2) return true;
-    return true;
-  };
-
-  const mainButtonAction = () => {
-    if (step === 1) {
-      haptic.impact("light");
-      setStep(2);
-    } else if (step === 2) {
-      deploy();
-    }
-  };
-
-  useTelegramMainButton(mainButtonText, mainButtonAction, {
-    disabled: !canProceed() || loading,
+  useTelegramMainButton("Deploy", deploy, {
+    disabled: !canDeploy || loading,
     loading,
   });
 
@@ -207,7 +208,7 @@ export default function TMADeployPage() {
     return () => clearTimeout(t);
   }, [form.name, checkName]);
 
-  const deploy = async () => {
+  async function deploy() {
     setLoading(true);
     setError("");
     try {
@@ -235,32 +236,16 @@ export default function TMADeployPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  const regenerateName = () => {
+    haptic.impact("light");
+    setForm((prev) => ({ ...prev, name: randomName() }));
   };
 
   return (
-    <div className="px-4 pt-4">
-      {/* Progress */}
-      <div className="flex items-center gap-1 mb-4">
-        {[1, 2].map((s) => (
-          <div
-            key={s}
-            className={`h-1 flex-1 rounded-full ${
-              s <= step ? "bg-[var(--primary)]" : "bg-[var(--border)]"
-            }`}
-          />
-        ))}
-      </div>
-
-      <h1 className="text-lg font-bold mb-1">
-        {step === 1 && "AI Model"}
-        {step === 2 && "Review & Deploy"}
-      </h1>
-
-      {/* Trial banner */}
-      <div className="flex items-center gap-2 rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-2 mb-4">
-        <Clock className="h-4 w-4 text-amber-400 shrink-0" />
-        <p className="text-xs text-amber-400">Free 1-hour trial - no payment needed</p>
-      </div>
+    <div className="px-4 pt-4 pb-6">
+      <h1 className="text-lg font-bold mb-4">Deploy OpenClaw</h1>
 
       {error && (
         <div className="rounded-lg bg-red-500/10 border border-red-500/20 p-3 text-sm text-red-400 mb-4">
@@ -268,149 +253,139 @@ export default function TMADeployPage() {
         </div>
       )}
 
-      {/* Step 1: Model */}
-      {step === 1 && (
-        <div className="space-y-4">
-          <Field label="Instance Name" value={form.name} onChange={(v) => update("name", v)} placeholder="My OpenClaw" />
-          {nameStatus.checking && <p className="text-xs text-[var(--muted-foreground)]">Checking...</p>}
-          {nameStatus.available === true && <p className="text-xs text-green-400">Available - {nameStatus.slug}</p>}
-          {nameStatus.available === false && <p className="text-xs text-red-400">Name taken</p>}
-
-          <div>
-            <label className="block text-xs text-[var(--muted-foreground)] mb-1.5">Provider</label>
-            <select
-              value={form.provider}
-              onChange={(e) => {
-                const p = LLM_PROVIDERS.find((x) => x.value === e.target.value)!;
-                setForm((prev) => ({ ...prev, provider: p.value, model: p.defaultModel }));
-              }}
-              className="w-full rounded-xl border border-[var(--border)] bg-[var(--card)] px-3 py-3 text-base appearance-none"
+      <div className="space-y-4">
+        {/* Instance name with regenerate button */}
+        <div>
+          <label className="block text-xs text-[var(--muted-foreground)] mb-1.5">Instance Name</label>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={form.name}
+              onChange={(e) => update("name", e.target.value)}
+              placeholder="my-agent"
+              className="flex-1 rounded-xl border border-[var(--border)] bg-[var(--card)] px-3 py-3 text-base focus:outline-none focus:ring-1 focus:ring-[var(--primary)]"
+            />
+            <button
+              onClick={regenerateName}
+              className="rounded-xl border border-[var(--border)] px-3 hover:bg-[var(--accent)] transition-colors"
+              title="Generate random name"
             >
-              {LLM_PROVIDERS.map((p) => (
-                <option key={p.value} value={p.value}>{p.label}</option>
-              ))}
-            </select>
+              <RefreshCw className="h-4 w-4" />
+            </button>
           </div>
+          {nameStatus.checking && <p className="text-xs text-[var(--muted-foreground)] mt-1">Checking...</p>}
+          {nameStatus.available === true && <p className="text-xs text-green-400 mt-1">Available - {nameStatus.slug}</p>}
+          {nameStatus.available === false && <p className="text-xs text-red-400 mt-1">Name taken</p>}
+        </div>
 
-          <div>
-            <label className="block text-xs text-[var(--muted-foreground)] mb-1.5">Model</label>
-            <select
-              value={form.model}
-              onChange={(e) => update("model", e.target.value)}
-              className="w-full rounded-xl border border-[var(--border)] bg-[var(--card)] px-3 py-3 text-base appearance-none"
-            >
-              {currentProvider.models.map((m) => (
-                <option key={m.value} value={m.value}>{m.label}</option>
-              ))}
-            </select>
-          </div>
+        {/* Provider */}
+        <div>
+          <label className="block text-xs text-[var(--muted-foreground)] mb-1.5">Provider</label>
+          <select
+            value={form.provider}
+            onChange={(e) => {
+              const p = LLM_PROVIDERS.find((x) => x.value === e.target.value)!;
+              setForm((prev) => ({ ...prev, provider: p.value, model: p.defaultModel }));
+            }}
+            className="w-full rounded-xl border border-[var(--border)] bg-[var(--card)] px-3 py-3 text-base appearance-none"
+          >
+            {LLM_PROVIDERS.map((p) => (
+              <option key={p.value} value={p.value}>{p.label}</option>
+            ))}
+          </select>
+        </div>
 
-          <Field
-            label="API Key"
-            value={form.apiKey}
-            onChange={(v) => update("apiKey", v)}
-            placeholder={currentProvider.placeholder}
+        {/* API Key */}
+        <div>
+          <label className="block text-xs text-[var(--muted-foreground)] mb-1.5">API Key</label>
+          <input
             type="password"
+            value={form.apiKey}
+            onChange={(e) => update("apiKey", e.target.value)}
+            placeholder={currentProvider.placeholder}
+            className="w-full rounded-xl border border-[var(--border)] bg-[var(--card)] px-3 py-3 text-base focus:outline-none focus:ring-1 focus:ring-[var(--primary)]"
           />
           <a
             href={currentProvider.apiKeyUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-xs text-[var(--primary)]"
+            className="inline-flex items-center gap-1 text-xs text-[var(--primary)] mt-1.5"
           >
             Get API key <ExternalLink className="h-3 w-3" />
           </a>
         </div>
-      )}
 
-      {/* Step 2: Review & Deploy */}
-      {step === 2 && (
-        <div className="space-y-4">
-          {/* Summary */}
-          <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-3 space-y-1 text-sm">
-            <div className="flex justify-between"><span className="text-[var(--muted-foreground)]">Name</span><span>{form.name}</span></div>
-            <div className="flex justify-between"><span className="text-[var(--muted-foreground)]">Provider</span><span className="capitalize">{form.provider}</span></div>
-            <div className="flex justify-between"><span className="text-[var(--muted-foreground)]">Model</span><span className="truncate ml-4">{form.model}</span></div>
-            {nameStatus.slug && (
-              <div className="flex justify-between"><span className="text-[var(--muted-foreground)]">URL</span><span className="truncate ml-4 text-[var(--primary)]">{nameStatus.slug}.server.tokn.deal</span></div>
+        {/* Model */}
+        <div>
+          <label className="block text-xs text-[var(--muted-foreground)] mb-1.5">Model</label>
+          <select
+            value={form.model}
+            onChange={(e) => update("model", e.target.value)}
+            className="w-full rounded-xl border border-[var(--border)] bg-[var(--card)] px-3 py-3 text-base appearance-none"
+          >
+            {currentProvider.models.map((m) => (
+              <option key={m.value} value={m.value}>{m.label}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Optional channels */}
+        <button
+          onClick={() => setShowChannels(!showChannels)}
+          className="w-full flex items-center justify-between rounded-xl border border-[var(--border)] p-3 text-sm"
+        >
+          <span className="text-[var(--muted-foreground)]">Add channels (optional)</span>
+          {showChannels ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+        </button>
+
+        {showChannels && (
+          <div className="space-y-3 rounded-xl border border-[var(--border)] bg-[var(--card)] p-3">
+            <p className="text-xs text-[var(--muted-foreground)]">
+              Connect messaging channels now or later via the Control UI.
+            </p>
+            <Field
+              label="Telegram Bot Token"
+              value={form.telegramBotToken}
+              onChange={(v) => update("telegramBotToken", v)}
+              placeholder="123456:ABC-DEF..."
+              type="password"
+            />
+            <Field
+              label="Discord Bot Token"
+              value={form.discordBotToken}
+              onChange={(v) => update("discordBotToken", v)}
+              placeholder="Bot token from Discord Developer Portal"
+              type="password"
+            />
+            <Field
+              label="Slack Bot Token"
+              value={form.slackBotToken}
+              onChange={(v) => update("slackBotToken", v)}
+              placeholder="xoxb-..."
+              type="password"
+            />
+            {form.slackBotToken && (
+              <Field
+                label="Slack App Token"
+                value={form.slackAppToken}
+                onChange={(v) => update("slackAppToken", v)}
+                placeholder="xapp-..."
+                type="password"
+              />
             )}
           </div>
+        )}
+      </div>
 
-          <div className="rounded-lg bg-blue-500/5 border border-blue-500/20 p-3">
-            <p className="text-xs text-[var(--foreground)]/70">
-              After deploy, use the OpenClaw Control UI to configure channels, agent personality, tools, and more.
-            </p>
-          </div>
-
-          {/* Optional channels */}
-          <button
-            onClick={() => setShowChannels(!showChannels)}
-            className="w-full flex items-center justify-between rounded-xl border border-[var(--border)] p-3 text-sm"
-          >
-            <span className="text-[var(--muted-foreground)]">Add channels (optional)</span>
-            {showChannels ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-          </button>
-
-          {showChannels && (
-            <div className="space-y-3 rounded-xl border border-[var(--border)] bg-[var(--card)] p-3">
-              <p className="text-xs text-[var(--muted-foreground)]">
-                Connect messaging channels now or later via the Control UI.
-              </p>
-              <Field
-                label="Telegram Bot Token"
-                value={form.telegramBotToken}
-                onChange={(v) => update("telegramBotToken", v)}
-                placeholder="123456:ABC-DEF..."
-                type="password"
-              />
-              <Field
-                label="Discord Bot Token"
-                value={form.discordBotToken}
-                onChange={(v) => update("discordBotToken", v)}
-                placeholder="Bot token from Discord Developer Portal"
-                type="password"
-              />
-              <Field
-                label="Slack Bot Token"
-                value={form.slackBotToken}
-                onChange={(v) => update("slackBotToken", v)}
-                placeholder="xoxb-..."
-                type="password"
-              />
-              {form.slackBotToken && (
-                <Field
-                  label="Slack App Token"
-                  value={form.slackAppToken}
-                  onChange={(v) => update("slackAppToken", v)}
-                  placeholder="xapp-..."
-                  type="password"
-                />
-              )}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Desktop action buttons (TMA uses native MainButton) */}
+      {/* Desktop deploy button (TMA uses native MainButton) */}
       {!isTMA && (
-        <div className="flex items-center gap-3 mt-6">
-          {step > 1 && (
-            <button
-              onClick={() => setStep((s) => s - 1)}
-              className="flex items-center gap-2 rounded-xl border border-[var(--border)] px-5 py-3 text-sm font-medium hover:bg-[var(--accent)] transition-colors"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Back
-            </button>
-          )}
-          <button
-            onClick={mainButtonAction}
-            disabled={!canProceed() || loading}
-            className="flex-1 rounded-xl bg-[var(--primary)] px-6 py-3 text-sm font-medium text-white hover:brightness-110 transition-all disabled:opacity-50"
-          >
-            {loading ? "Deploying..." : mainButtonText}
-          </button>
-        </div>
+        <button
+          onClick={deploy}
+          disabled={!canDeploy || loading}
+          className="mt-6 w-full rounded-xl bg-[var(--primary)] px-6 py-3.5 text-sm font-medium text-white hover:brightness-110 transition-all disabled:opacity-50"
+        >
+          {loading ? "Deploying..." : "Deploy"}
+        </button>
       )}
     </div>
   );
@@ -422,21 +397,18 @@ function Field({
   onChange,
   placeholder,
   type = "text",
-  inputMode,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   placeholder?: string;
   type?: string;
-  inputMode?: "numeric" | "tel" | "text";
 }) {
   return (
     <div>
       <label className="block text-xs text-[var(--muted-foreground)] mb-1.5">{label}</label>
       <input
         type={type}
-        inputMode={inputMode}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}

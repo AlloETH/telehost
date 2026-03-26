@@ -15,8 +15,10 @@ export interface OpenClawGatewayClient {
 export function createGatewayClient(
   slug: string,
   token: string,
+  coolifyDomain?: string,
 ): OpenClawGatewayClient {
-  return { baseUrl: agentInternalUrl(slug), token };
+  const baseUrl = coolifyDomain || agentInternalUrl(slug);
+  return { baseUrl, token };
 }
 
 // ---------------------------------------------------------------------------

@@ -30,9 +30,11 @@ interface Agent {
   id: string;
   name: string;
   status: string;
+  coolifyAppUuid?: string | null;
   coolifyStatus?: string;
   healthStatus?: string | null;
   webuiAuthToken: string | null;
+  provisioningStep?: string | null;
   lastError: string | null;
   lastHealthCheck: string | null;
   restartCount: number;
@@ -85,7 +87,7 @@ export default function TMAAgentDetailPage({
 
   useEffect(() => {
     if (intervalRef.current) clearInterval(intervalRef.current);
-    const ms = agent && TRANSITIONAL.includes(agent.status) ? 5000 : 10000;
+    const ms = agent && TRANSITIONAL.includes(agent.status) ? 2000 : 10000;
     intervalRef.current = setInterval(fetchAgent, ms);
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
@@ -118,10 +120,17 @@ export default function TMAAgentDetailPage({
     if (!confirmed) return;
     haptic.notification("warning");
     setActionLoading("delete");
+    // Stop polling before delete to avoid 404 errors after navigation
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
     try {
       await apiFetch(`/agents/${agentId}`, { method: "DELETE" });
       router.push("/app");
-    } finally {
+    } catch {
+      // Restart polling if delete failed
+      intervalRef.current = setInterval(fetchAgent, 10000);
       setActionLoading("");
     }
   };
@@ -215,24 +224,63 @@ export default function TMAAgentDetailPage({
       {/* Alerts */}
       <div className="space-y-2 mb-4">
         {TRANSITIONAL.includes(agent.status) && (
-          <div className="flex items-center gap-3 rounded-xl border border-blue-500/30 bg-blue-500/5 p-3">
-            <Loader2 className="h-4 w-4 animate-spin text-blue-400 shrink-0" />
-            <p className="text-sm text-blue-400">
-              {agent.status === "provisioning" ? "Provisioning..." :
-               agent.status === "deploying" ? "Deploying..." :
-               agent.status === "starting" ? "Starting..." :
-               agent.status === "stopping" ? "Stopping..." :
-               agent.status === "restarting" ? "Restarting..." : "Processing..."}
-            </p>
-          </div>
+          agent.status === "provisioning" || agent.status === "starting" ? (
+            <ProvisioningProgress step={agent.provisioningStep || "creating_app"} status={agent.status} />
+          ) : (
+            <div className="flex items-center gap-3 rounded-xl border border-blue-500/30 bg-blue-500/5 p-3">
+              <Loader2 className="h-4 w-4 animate-spin text-blue-400 shrink-0" />
+              <p className="text-sm text-blue-400">
+                {agent.status === "deploying" ? "Deploying..." :
+                 agent.status === "stopping" ? "Stopping..." :
+                 agent.status === "restarting" ? "Restarting..." : "Processing..."}
+              </p>
+            </div>
+          )
         )}
 
         {agent.trialEndsAt && <TrialBanner trialEndsAt={agent.trialEndsAt} status={agent.status} />}
 
         {agent.lastError && (
-          <div className="flex items-start gap-3 rounded-xl border border-red-500/30 bg-red-500/5 p-3">
-            <AlertTriangle className="h-4 w-4 text-red-400 mt-0.5 shrink-0" />
-            <p className="text-sm text-red-400">{agent.lastError}</p>
+          <div className="rounded-xl border border-red-500/30 bg-red-500/5 p-3">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="h-4 w-4 text-red-400 mt-0.5 shrink-0" />
+              <p className="text-sm text-red-400">{agent.lastError}</p>
+            </div>
+            {agent.status === "error" && (
+              <div className="flex gap-2 mt-3">
+                {agent.coolifyAppUuid ? (
+                  <button
+                    onClick={() => doAction("redeploy")}
+                    disabled={isBusy}
+                    className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-blue-600 text-white px-3 py-2 text-xs font-medium disabled:opacity-50 active:opacity-80"
+                  >
+                    <RefreshCw className="h-3 w-3" />
+                    Retry Deploy
+                  </button>
+                ) : (
+                  <button
+                    onClick={async () => {
+                      haptic.impact("medium");
+                      setActionLoading("recreate");
+                      try {
+                        const res = await apiFetch(`/agents/${agentId}/recreate`, { method: "POST" });
+                        const data = await res.json();
+                        if (res.ok && data.agentId) {
+                          router.push(`/app/agents/${data.agentId}`);
+                        }
+                      } finally {
+                        setActionLoading("");
+                      }
+                    }}
+                    disabled={isBusy}
+                    className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-blue-600 text-white px-3 py-2 text-xs font-medium disabled:opacity-50 active:opacity-80"
+                  >
+                    {actionLoading === "recreate" ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+                    Re-create
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -439,7 +487,7 @@ export default function TMAAgentDetailPage({
       {/* Delete */}
       <button
         onClick={doDelete}
-        disabled={isBusy}
+        disabled={!!actionLoading}
         className="w-full flex items-center justify-center gap-2 rounded-xl border border-red-500/30 p-3.5 text-sm text-red-400 disabled:opacity-50 active:opacity-80 transition-opacity mb-4"
       >
         {actionLoading === "delete" || agent.status === "deleting" ? (
@@ -600,5 +648,53 @@ function StatusBadge({ status }: { status: string }) {
     <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${colors[status] || "bg-gray-500/20 text-gray-400"}`}>
       {status.replace(/_/g, " ")}
     </span>
+  );
+}
+
+const PROVISION_STEPS = [
+  { key: "creating_app", label: "Creating app" },
+  { key: "configuring", label: "Configuring" },
+  { key: "starting", label: "Starting container" },
+  { key: "health_check", label: "Health check" },
+];
+
+function ProvisioningProgress({ step, status }: { step: string; status: string }) {
+  const currentIdx = PROVISION_STEPS.findIndex((s) => s.key === step);
+  // If agent status is "starting", we're at least on step 3
+  const effectiveIdx = status === "starting" && currentIdx < 2 ? 2 : currentIdx;
+
+  return (
+    <div className="rounded-xl border border-blue-500/30 bg-blue-500/5 p-4">
+      <div className="flex items-center gap-2 mb-3">
+        <Loader2 className="h-4 w-4 animate-spin text-blue-400" />
+        <span className="text-sm font-medium text-blue-400">Deploying your agent...</span>
+      </div>
+      <div className="space-y-2">
+        {PROVISION_STEPS.map((s, i) => {
+          const done = i < effectiveIdx;
+          const active = i === effectiveIdx;
+          return (
+            <div key={s.key} className="flex items-center gap-2.5">
+              <div className={`h-5 w-5 rounded-full flex items-center justify-center text-xs shrink-0 ${
+                done ? "bg-green-500/20 text-green-400" :
+                active ? "bg-blue-500/20 text-blue-400" :
+                "bg-gray-500/10 text-gray-500"
+              }`}>
+                {done ? <Check className="h-3 w-3" /> :
+                 active ? <Loader2 className="h-3 w-3 animate-spin" /> :
+                 <span>{i + 1}</span>}
+              </div>
+              <span className={`text-sm ${
+                done ? "text-green-400" :
+                active ? "text-blue-400 font-medium" :
+                "text-[var(--muted-foreground)]"
+              }`}>
+                {s.label}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }

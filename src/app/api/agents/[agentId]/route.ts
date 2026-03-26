@@ -30,6 +30,7 @@ export async function GET(
       status: agents.status,
       coolifyAppUuid: agents.coolifyAppUuid,
       webuiAuthToken: agents.webuiAuthToken,
+      provisioningStep: agents.provisioningStep,
       lastHealthCheck: agents.lastHealthCheck,
       lastError: agents.lastError,
       restartCount: agents.restartCount,
