@@ -43,7 +43,7 @@ yarn-error.log*
 next-env.d.ts
 
 # drizzle
-/drizzle/meta
+# /drizzle/meta — must be tracked for migrations to work
 
 # claude
 .claude/
