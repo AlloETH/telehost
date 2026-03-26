@@ -102,17 +102,38 @@ export class AgentsService {
       trialEndsAt,
     }).returning();
 
-    this.provisionAgent(agent.id, { slug, routingDomain, tier, configJson, gatewayToken, config }).catch((err) => {
+    this.provisionAgent(agent.id, { slug, routingDomain, tier, configJson, gatewayToken, config }).catch(async (err) => {
       console.error(`[provision] Failed for agent ${agent.id}:`, err);
-      this.db.update(agents).set({ status: "error", lastError: err instanceof Error ? err.message : "Provisioning failed", updatedAt: new Date() }).where(eq(agents.id, agent.id)).catch(console.error);
+      const [current] = await this.db.select({ provisioningStep: agents.provisioningStep }).from(agents).where(eq(agents.id, agent.id)).limit(1).catch(() => [{ provisioningStep: null }]);
+      const step = current?.provisioningStep || "unknown";
+      const detail = err instanceof Error ? err.message : "Provisioning failed";
+      this.db.update(agents).set({ status: "error", lastError: `Failed at step "${step}": ${detail}`, updatedAt: new Date() }).where(eq(agents.id, agent.id)).catch(console.error);
     });
 
     return agent.id;
   }
 
+  private async setProvisioningStep(agentId: string, step: string) {
+    await this.db.update(agents).set({ provisioningStep: step, updatedAt: new Date() }).where(eq(agents.id, agentId));
+  }
+
+  private async withRetry<T>(fn: () => Promise<T>, retries = 2, delayMs = 2000): Promise<T> {
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try { return await fn(); } catch (err) {
+        const is5xx = err instanceof Error && "statusCode" in err && (err as any).statusCode >= 500;
+        if (attempt < retries && is5xx) { await new Promise((r) => setTimeout(r, delayMs)); continue; }
+        throw err;
+      }
+    }
+    throw new Error("Retry exhausted");
+  }
+
   private async provisionAgent(agentId: string, opts: { slug: string; routingDomain?: string; tier: SubscriptionTier; configJson: string; gatewayToken: string; config: OpenClawConfig }) {
     const tierConfig = SUBSCRIPTION_TIERS[opts.tier];
-    const coolifyApp = await this.coolify.createApplication({
+
+    // Step 1: Create Coolify app
+    await this.setProvisioningStep(agentId, "creating_app");
+    const coolifyApp = await this.withRetry(() => this.coolify.createApplication({
       project_uuid: process.env.COOLIFY_PROJECT_UUID!,
       server_uuid: process.env.COOLIFY_SERVER_UUID!,
       environment_name: process.env.COOLIFY_ENVIRONMENT_NAME || "production",
@@ -127,7 +148,7 @@ export class AgentsService {
       limits_cpus: tierConfig.cpuLimit,
       health_check_enabled: true, health_check_path: "/healthz", health_check_port: OPENCLAW_GATEWAY_PORT,
       health_check_interval: 30, health_check_timeout: 10, health_check_retries: 3, health_check_start_period: 60,
-    });
+    }));
 
     await this.db.update(agents).set({ coolifyAppUuid: coolifyApp.uuid, updatedAt: new Date() }).where(eq(agents.id, agentId));
 
@@ -136,6 +157,8 @@ export class AgentsService {
       try { await this.coolify.getApplication(coolifyApp.uuid); break; } catch { await new Promise((r) => setTimeout(r, 2000)); }
     }
 
+    // Step 2: Configure
+    await this.setProvisioningStep(agentId, "configuring");
     await this.coolify.addPersistentVolume(coolifyApp.uuid, "/home/node/.openclaw");
 
     const syncUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "";
@@ -151,7 +174,10 @@ export class AgentsService {
       { key: "TELEHOST_SYNC_TOKEN", value: opts.gatewayToken, is_build_time: false },
     ];
     await this.coolify.bulkSetEnvVars(coolifyApp.uuid, envVars);
-    await this.coolify.startApplication(coolifyApp.uuid);
+
+    // Step 3: Start
+    await this.setProvisioningStep(agentId, "starting");
+    await this.withRetry(() => this.coolify.startApplication(coolifyApp.uuid));
     await this.db.update(agents).set({ status: "starting", updatedAt: new Date() }).where(eq(agents.id, agentId));
   }
 

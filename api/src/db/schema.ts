@@ -139,6 +139,9 @@ export const agents = pgTable(
     // Trial
     trialEndsAt: timestamp("trial_ends_at"),
 
+    // Provisioning progress (creating_app, configuring, starting, health_check)
+    provisioningStep: varchar("provisioning_step", { length: 50 }),
+
     // Metadata
     lastHealthCheck: timestamp("last_health_check"),
     lastError: text("last_error"),

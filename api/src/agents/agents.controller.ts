@@ -79,7 +79,7 @@ export class AgentsController {
   @Get(":agentId")
   async getOne(@Param("agentId") agentId: string, @CurrentUser() user: CurrentUserPayload) {
     const results = await this.db
-      .select({ id: agents.id, name: agents.name, status: agents.status, coolifyAppUuid: agents.coolifyAppUuid, webuiAuthToken: agents.webuiAuthToken, lastHealthCheck: agents.lastHealthCheck, lastError: agents.lastError, restartCount: agents.restartCount, createdAt: agents.createdAt, updatedAt: agents.updatedAt, stoppedAt: agents.stoppedAt, trialEndsAt: agents.trialEndsAt, configEncrypted: agents.configEncrypted, configIv: agents.configIv, configTag: agents.configTag })
+      .select({ id: agents.id, name: agents.name, status: agents.status, coolifyAppUuid: agents.coolifyAppUuid, webuiAuthToken: agents.webuiAuthToken, provisioningStep: agents.provisioningStep, lastHealthCheck: agents.lastHealthCheck, lastError: agents.lastError, restartCount: agents.restartCount, createdAt: agents.createdAt, updatedAt: agents.updatedAt, stoppedAt: agents.stoppedAt, trialEndsAt: agents.trialEndsAt, configEncrypted: agents.configEncrypted, configIv: agents.configIv, configTag: agents.configTag })
       .from(agents).where(and(eq(agents.id, agentId), eq(agents.userId, user.userId))).limit(1);
 
     if (results.length === 0) throw new NotFoundException("Agent not found");
@@ -195,6 +195,34 @@ export class AgentsController {
     await this.verifyOwnership(agentId, user.userId);
     await this.agentsService.redeployAgent(agentId);
     return { success: true };
+  }
+
+  @Post(":agentId/recreate")
+  async recreate(@Param("agentId") agentId: string, @CurrentUser() user: CurrentUserPayload) {
+    const existing = await this.db.select().from(agents).where(and(eq(agents.id, agentId), eq(agents.userId, user.userId))).limit(1);
+    if (existing.length === 0) throw new NotFoundException("Agent not found");
+    const agent = existing[0];
+    if (agent.status !== "error") throw new BadRequestException("Can only recreate agents in error state");
+
+    // Decrypt config to reconstruct creation input
+    let config;
+    try {
+      const [tag, salt] = agent.configTag.split(":");
+      const configStr = this.crypto.decrypt({ ciphertext: agent.configEncrypted, iv: agent.configIv, tag, salt });
+      const parsed = JSON.parse(configStr);
+      const modelStr = parsed.agents?.defaults?.model?.primary || "";
+      const [provider, ...modelParts] = modelStr.split("/");
+      config = {
+        provider: provider || "", apiKey: parsed._apiKey || "", model: modelParts.join("/") || "",
+        telegramBotToken: parsed.channels?.telegram?.botToken, discordBotToken: parsed.channels?.discord?.botToken,
+        slackBotToken: parsed.channels?.slack?.botToken, slackAppToken: parsed.channels?.slack?.appToken,
+      };
+    } catch { throw new BadRequestException("Failed to recover agent configuration"); }
+
+    const name = agent.name;
+    try { await this.agentsService.deleteAgent(agentId); } catch {}
+    const newAgentId = await this.agentsService.createAgent(user.userId, name, config);
+    return { agentId: newAgentId };
   }
 
   @Get(":agentId/logs")
